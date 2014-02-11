@@ -1,0 +1,10 @@
+Borja Sotomayor
+    chiTCP daemon and libchitcp library, except 
+    contributions noted below.
+
+Nathan Hatch
+    Protocol buffers in internal daemon API
+    Debugging API
+
+Calvin Deutschbein
+    Initial implementation of TCP protocol

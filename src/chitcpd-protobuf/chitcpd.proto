@@ -1,0 +1,125 @@
+enum ChitcpdMsgCode {
+    /* 
+     * Note: when compiled, these will generate C enums of the form
+     * CHITCPD_MSG_CODE__SOCKET
+     */
+    SOCKET = 1;
+    BIND = 2;
+    LISTEN = 3;
+    ACCEPT = 4;
+    CONNECT = 5;
+    SEND = 6;
+    RECV = 7;
+    CLOSE = 8;
+    GET_SOCKET_STATE = 9;
+    GET_SOCKET_BUFFER_CONTENTS = 10;
+    RESP = 11;
+    DEBUG = 12;
+    DEBUG_EVENT = 13;
+}
+
+message ChitcpdMsg {
+    required ChitcpdMsgCode code = 1 ; /* for dispatch table */
+    optional ChitcpdSocketArgs socket_args = 2; 
+    optional ChitcpdBindArgs bind_args = 3; 
+    optional ChitcpdListenArgs listen_args = 4; 
+    optional ChitcpdAcceptArgs accept_args = 5; 
+    optional ChitcpdConnectArgs connect_args = 6; 
+    optional ChitcpdRecvArgs recv_args = 7; 
+    optional ChitcpdSendArgs send_args = 8; 
+    optional ChitcpdCloseArgs close_args = 9;
+    optional ChitcpdGetSocketStateArgs get_socket_state_args = 10;
+    optional ChitcpdGetSocketBufferContentsArgs get_socket_buffer_contents_args = 11;
+    optional ChitcpdResp resp = 12;
+    optional ChitcpdDebugArgs debug_args = 13;
+    optional ChitcpdDebugEventArgs debug_event_args = 14;
+}
+
+message ChitcpdSocketArgs {
+    required int32 domain = 1;
+    required int32 type = 2;
+    required int32 protocol = 3;
+}
+
+message ChitcpdBindArgs {
+    required int32 sockfd = 1;
+    required bytes addr = 2;
+}
+
+message ChitcpdListenArgs {
+    required int32 sockfd = 1;
+    required int32 backlog = 2;
+}
+
+message ChitcpdAcceptArgs {
+    required int32 sockfd = 1;
+}
+
+message ChitcpdConnectArgs {
+    required int32 sockfd = 1;
+    required bytes addr = 2;
+}
+
+message ChitcpdRecvArgs {
+    required int32 sockfd = 1;
+    required int32 flags = 2;
+    required int32 len = 3; /* client process buffer size */
+}
+
+message ChitcpdSendArgs {
+    required int32 sockfd = 1;
+    required int32 flags = 2;
+    required bytes buf = 3;
+}
+
+message ChitcpdCloseArgs {
+    required int32 sockfd = 1;
+}
+
+message ChitcpdDebugArgs {
+    required int32 sockfd = 1; /* in the future, might change to "repeated" */
+    required int32 event_flags = 2; /* which events to listen for */
+}
+
+message ChitcpdDebugEventArgs {
+    required int32 sockfd = 1;
+    required int32 event_flag = 2;
+    required int32 new_sockfd = 3;
+}
+
+message ChitcpdGetSocketStateArgs {
+    required int32 sockfd = 1;
+}
+
+message ChitcpdGetSocketBufferContentsArgs {
+    required int32 sockfd = 1;
+}
+
+/* A message containing detailed information about an active chisocket */
+message ChitcpdSocketState {
+    required int32 tcp_state = 1;
+    required int32 iss = 2;
+    required int32 irs = 3;
+    required int32 snd_una = 4;
+    required int32 rcv_nxt = 5;
+    required int32 snd_nxt = 6;
+    required int32 rcv_wnd = 7;
+    required int32 snd_wnd = 8;
+}
+
+/* A message containing the TCP buffer contents for an active chisocket */
+message ChitcpdSocketBufferContents {
+    required bytes snd = 1;
+    required bytes rcv = 2;
+}
+
+/* A single message type encompassing all command responses */
+message ChitcpdResp {
+    required int32 ret = 1;
+    required int32 error_code = 2;
+    optional bytes addr = 3; /* for accept() */
+    optional bytes buf = 4; /* for recv() */
+    optional ChitcpdSocketState socket_state = 5; /* for socket_state() */
+    optional ChitcpdSocketBufferContents socket_buffer_contents = 6; /* for buffer_contents() */
+}
+

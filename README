@@ -1,0 +1,10 @@
+chiTCP - A simple, testable TCP stack
+=====================================
+
+This will eventually be a more substantial README.
+
+For now, see doc/chitcp_project_specification.tex
+
+Please note that INSTALL provides generic installation
+instructions. Do not follow them unless you know what
+you're doing. Instead, see the project specification.
