@@ -85,7 +85,7 @@ int circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, boo
         toread = (buf->end - buf->start);
 
     if(dst)
-        memcpy(dst, buf->data + buf->start, len);
+        memcpy(dst, buf->data + buf->start, toread);
     buf->start += toread;
     buf->seq_start += toread;
 
@@ -102,7 +102,7 @@ int circular_buffer_peek(circular_buffer_t *buf, uint8_t *dst, uint32_t len, boo
         toread = (buf->end - buf->start);
 
     if(dst)
-        memcpy(dst, buf->data + buf->start, len);
+        memcpy(dst, buf->data + buf->start, toread);
 
     return toread;
 }
