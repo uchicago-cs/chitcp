@@ -429,7 +429,7 @@ void* chitcpd_server_thread_func(void *args)
          * before an orderly shutdown and would be left lingering until
          * we call join here. */
         handler_thread_t *ht = list_fetch(&handler_thread_list);
-        close(ht->handler_socket);
+        shutdown(ht->handler_socket, SHUT_RDWR);
         pthread_join(ht->thread, NULL);
     }
 
@@ -616,9 +616,9 @@ void* chitcpd_server_network_thread_func(void *args)
         connection = &si->connection_table[i];
         if(!connection->available)
         {
-            close(connection->realsocket_recv);
+            shutdown(connection->realsocket_recv, SHUT_RDWR);
             if (connection->realsocket_recv != connection->realsocket_send)
-                close(connection->realsocket_send);
+                shutdown(connection->realsocket_send, SHUT_RDWR);
             pthread_join(connection->thread, NULL);
         }
     }
