@@ -2,7 +2,7 @@
 #
 # Common
 #
-ACLOCAL_AMFLAGS = -I m4                                                                                                                                                                            PRINT_DIRECTORY_FLAGS_1=
+ACLOCAL_AMFLAGS = -I m4
 AM_CFLAGS = -I$(srcdir)/include -I$(srcdir)/src/chitcpd-protobuf/ -I$(srcdir)/src/simclist/ \
             -g3 -Wall -std=gnu99 -ggdb -D_GNU_SOURCE
 AM_LDFLAGS = -pthread
