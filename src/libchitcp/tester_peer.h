@@ -18,6 +18,7 @@ typedef enum
 typedef struct chitcp_tester_peer
 {
     int sockfd;
+    int passive_sockfd;
 
     pthread_t peer_thread;
 

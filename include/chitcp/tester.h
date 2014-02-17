@@ -26,6 +26,18 @@ int chitcp_tester_init(chitcp_tester_t* tester);
 
 
 /*
+ * chitcp_tester_free - Frees a tester's resources
+ *
+ * tester: Tester data structure
+ *
+ * Returns:
+ *  - CHITCP_OK: Packet was processed correctly
+ *
+ */
+int chitcp_tester_free(chitcp_tester_t* tester);
+
+
+/*
  * chitcp_tester_start - Starts the tester
  *
  * This function will launch a server thread and a client thread.
@@ -41,9 +53,58 @@ int chitcp_tester_init(chitcp_tester_t* tester);
 int chitcp_tester_start(chitcp_tester_t* tester);
 
 
+/*
+ * chitcp_tester_server_set_debug - Adds a debug handler to the server
+ *
+ * This function uses the chiTCP debug API (see debug_api.h) to assign
+ * a debug handler to the server socket.
+ *
+ * tester: Tester data structure
+ *
+ * handler: Pointer to function of type debug_event_handler
+ *
+ * event_flags: Events to be handled by the debug handler
+ *
+ * Returns:
+ *  - CHITCP_OK: Debug handler set correctly
+ *  - CHITCP_EINVAL: Invalid parameter value
+ */
 int chitcp_tester_server_set_debug(chitcp_tester_t* tester, debug_event_handler handler, int event_flags);
+
+
+
+/*
+ * chitcp_tester_client_set_debug - Adds a debug handler to the client
+ *
+ * Same as chitcp_tester_server_set_debug, but for the client socket
+ */
 int chitcp_tester_client_set_debug(chitcp_tester_t* tester, debug_event_handler handler, int event_flags);
 
+
+
+/*
+ * chitcp_tester_server_wait_for_state - Wait for server socket to reach TCP state
+ *
+ * This function uses the chiTCP debug API (see debug_api.h) to wait
+ * for the TCP state of a given socket to reach a certain state.
+ *
+ * tester: Tester data structure
+ *
+ * tcp_state: TCP state
+ *
+ * Returns:
+ *  - CHITCP_OK: Debug handler set correctly
+ *  - CHITCP_EINVAL: Invalid parameter value
+ */
+int chitcp_tester_server_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state);
+
+
+/*
+ * chitcp_tester_client_wait_for_state - Wait for client socket to reach TCP state
+ *
+ * Same as chitcp_tester_server_wait_for_state but for the client socket
+ */
+int chitcp_tester_client_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state);
 
 /*
  * chitcp_tester_server_listen - Start listening on server socket

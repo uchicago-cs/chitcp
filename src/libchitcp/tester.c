@@ -39,6 +39,28 @@ int chitcp_tester_init(chitcp_tester_t* tester)
 }
 
 /* See tester.h */
+int chitcp_tester_free(chitcp_tester_t* tester)
+{
+    RET_ON_ERROR(pthread_mutex_destroy(&tester->server->lock_event),
+            CHITCP_ESYNC);
+
+    RET_ON_ERROR(pthread_cond_destroy(&tester->server->cv_event),
+            CHITCP_ESYNC);
+
+    RET_ON_ERROR(pthread_mutex_destroy(&tester->client->lock_event),
+            CHITCP_ESYNC);
+
+    RET_ON_ERROR(pthread_cond_destroy(&tester->client->cv_event),
+            CHITCP_ESYNC);
+
+    free(tester->server);
+    free(tester->client);
+
+    return CHITCP_OK;
+}
+
+
+/* See tester.h */
 int chitcp_tester_start(chitcp_tester_t* tester)
 {
     /* Create server thread */
@@ -91,6 +113,24 @@ int chitcp_tester_client_set_debug(chitcp_tester_t* tester, debug_event_handler 
 
 
 /* See tester.h */
+int chitcp_tester_server_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state)
+{
+    chitcpd_wait_for_state(tester->server->sockfd, tcp_state);
+
+    return CHITCP_OK;
+}
+
+
+/* See tester.h */
+int chitcp_tester_client_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state)
+{
+    chitcpd_wait_for_state(tester->client->sockfd, tcp_state);
+
+    return CHITCP_OK;
+}
+
+
+/* See tester.h */
 int chitcp_tester_server_listen(chitcp_tester_t* tester)
 {
     return chitcp_tester_peer_event(tester->server, TEST_EVENT_LISTEN);
@@ -111,11 +151,11 @@ int chitcp_tester_client_connect(chitcp_tester_t* tester)
 /* See tester.h */
 int chitcp_tester_client_close(chitcp_tester_t* tester)
 {
-    return chitcp_tester_peer_event(tester->server, TEST_EVENT_CLOSE);
+    return chitcp_tester_peer_event(tester->client, TEST_EVENT_CLOSE);
 }
 
 /* See tester.h */
 int chitcp_tester_server_close(chitcp_tester_t* tester)
 {
-    return chitcp_tester_peer_event(tester->client, TEST_EVENT_CLOSE);
+    return chitcp_tester_peer_event(tester->server, TEST_EVENT_CLOSE);
 }

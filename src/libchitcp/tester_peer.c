@@ -18,7 +18,7 @@ void chitcp_tester_peer_init(chitcp_tester_t *tester, chitcp_tester_peer_t *peer
                                     SOCK_STREAM,   // Type: Full-duplex stream (reliable)
                                     IPPROTO_TCP);  // Protocol: TCP;
 
-    printf("The socket is %i\n", peer->sockfd);
+    peer->passive_sockfd = -1;
 
     if(peer->sockfd == -1)
     {
@@ -86,6 +86,25 @@ void chitcp_tester_peer_connect(chitcp_tester_t *tester, chitcp_tester_peer_t *p
     }
 }
 
+void chitcp_tester_peer_close(chitcp_tester_t *tester, chitcp_tester_peer_t *peer)
+{
+    if (chisocket_close(peer->sockfd) == -1)
+    {
+        perror("Could not close to socket");
+        exit(-1);
+    }
+
+    if(peer->passive_sockfd != -1)
+    {
+        if (chisocket_close(peer->passive_sockfd) == -1)
+        {
+            perror("Could not close passive socket");
+            exit(-1);
+        }
+    }
+
+}
+
 
 void* chitcp_tester_peer_thread_func(void *args)
 {
@@ -99,8 +118,6 @@ void* chitcp_tester_peer_thread_func(void *args)
     peer = tpta->peer;
 
     int clientSocket = -1;
-
-    printf("Started peer thread\n");
 
     while(!done)
     {
@@ -131,6 +148,7 @@ void* chitcp_tester_peer_thread_func(void *args)
 
             break;
         case TEST_EVENT_CLOSE:
+            chitcp_tester_peer_close(tester, peer);
             done = TRUE;
             break;
         }
@@ -151,6 +169,8 @@ void* chitcp_tester_peer_thread_func(void *args)
                 chisocket_close(peer->sockfd);
                 exit(-1);
             }
+            peer->passive_sockfd = peer->sockfd;
+            peer->sockfd = clientSocket;
         }
         else
         {
@@ -174,7 +194,6 @@ int chitcp_tester_peer_event(chitcp_tester_peer_t* peer, test_event_t event)
 
     RET_ON_ERROR(pthread_cond_signal(&peer->cv_event),
             CHITCP_ESYNC);
-
     while(peer->event != TEST_EVENT_NONE)
     {
         RET_ON_ERROR(pthread_cond_wait(&peer->cv_event, &peer->lock_event),
