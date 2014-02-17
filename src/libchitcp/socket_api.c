@@ -50,7 +50,6 @@
 #include <string.h>
 #include <stdlib.h> /* for malloc */
 #include <errno.h>
-#include <error.h>
 
 #include "chitcp/socket.h"
 #include "chitcp/types.h"
