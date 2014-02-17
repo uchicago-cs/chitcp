@@ -278,7 +278,7 @@ tcpconnentry_t* chitcpd_create_connection(serverinfo_t *si, struct sockaddr* add
 
 
     memcpy(&connection->peer_addr, addr, addrsize);
-    chitcp_set_addr_port((struct sockaddr*) &connection->peer_addr, chitcp_htons(DEFAULT_CHITCPD_PORT));
+    chitcp_set_addr_port((struct sockaddr*) &connection->peer_addr, chitcp_htons(GET_CHITCPD_PORT));
 
     /* Establish connection */
     /* TODO: Fail gracefully if unable to connect to peer */
@@ -383,7 +383,7 @@ tcpconnentry_t* chitcpd_add_connection(serverinfo_t *si, socket_t realsocket_sen
     }
 
     memcpy(&ret->peer_addr, addr, addrsize);
-    chitcp_set_addr_port((struct sockaddr*) &ret->peer_addr, chitcp_htons(DEFAULT_CHITCPD_PORT));
+    chitcp_set_addr_port((struct sockaddr*) &ret->peer_addr, chitcp_htons(GET_CHITCPD_PORT));
 
     /* Set sockets */
     ret->realsocket_send = realsocket_send;

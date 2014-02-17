@@ -44,14 +44,15 @@
 #ifndef CHITCP_CHITCPD_H_
 #define CHITCP_CHITCPD_H_
 
+#include <stdlib.h>
 #include <stdint.h>
 #include "chitcp/types.h"
 #include "chitcp/debug_api.h"
 
 /* Default values */
-#define DEFAULT_CHITCPD_SOCK "/tmp/chitcpd.socket"
-#define DEFAULT_CHITCPD_PORT_STRING "23300"
-#define DEFAULT_CHITCPD_PORT (23300)
+#define GET_CHITCPD_SOCK (getenv("CHITCPD_SOCK")? getenv("CHITCPD_SOCK"): "/tmp/chitcpd.socket")
+#define GET_CHITCPD_PORT_STRING (getenv("CHITCPD_PORT")? getenv("CHITCPD_PORT"): "23300")
+#define GET_CHITCPD_PORT (atoi(GET_CHITCPD_PORT_STRING))
 
 /* Maximum payload of a chitcpd request/response */
 #define MAX_CHITCPD_PAYLOAD_SIZE (1024)

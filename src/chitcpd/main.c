@@ -65,8 +65,8 @@ int main(int argc, char *argv[])
     serverinfo_t *si;
     sigset_t new;
     int opt;
-    char *port = DEFAULT_CHITCPD_PORT_STRING;
-    char *usocket = DEFAULT_CHITCPD_SOCK;
+    char *port = NULL;
+    char *usocket = NULL;
     int verbosity = 0;
 
     /* Stop SIGPIPE from messing with our sockets */
@@ -98,6 +98,12 @@ int main(int argc, char *argv[])
             printf("ERROR: Unknown option -%c\n", opt);
             exit(-1);
         }
+
+    if(!port)
+        port = GET_CHITCPD_PORT_STRING;
+
+    if(!usocket)
+        usocket = GET_CHITCPD_SOCK;
 
     /* Set logging level based on verbosity */
     switch(verbosity)

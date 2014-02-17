@@ -17,8 +17,8 @@ START_TEST (test_chitcpd_startstop)
     serverinfo_t *si;
 
     si = calloc(1, sizeof(serverinfo_t));
-    si->server_port = chitcp_htons(23301);
-    si->server_socket_path = DEFAULT_CHITCPD_SOCK;
+    si->server_port = chitcp_htons(GET_CHITCPD_PORT);
+    si->server_socket_path = GET_CHITCPD_SOCK;
 
     rc = chitcpd_server_init(si);
     ck_assert_msg(rc == 0, "Could not initialize chiTCP daemon.");

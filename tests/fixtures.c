@@ -16,8 +16,8 @@ void chitcpd_and_tester_setup(void)
     int rc;
 
     si = calloc(1, sizeof(serverinfo_t));
-    si->server_port = chitcp_htons(23300);
-    si->server_socket_path = DEFAULT_CHITCPD_SOCK;
+    si->server_port = chitcp_htons(GET_CHITCPD_PORT);
+    si->server_socket_path = GET_CHITCPD_SOCK;
     chitcp_setloglevel(CRITICAL);
 
     rc = chitcpd_server_init(si);
