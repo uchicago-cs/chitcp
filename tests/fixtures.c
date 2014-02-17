@@ -8,7 +8,6 @@
 #include "chitcp/tester.h"
 #include "chitcp/log.h"
 
-
 serverinfo_t *si;
 chitcp_tester_t *tester;
 
@@ -46,7 +45,7 @@ void chitcpd_and_tester_teardown(void)
     chitcp_tester_free(tester);
 }
 
-void tester_run(void)
+void tester_connect(void)
 {
     int rc;
 
@@ -61,6 +60,11 @@ void tester_run(void)
 
     rc = chitcp_tester_client_connect(tester);
     ck_assert_msg(rc == 0, "Tester did not connect()");
+}
+
+void tester_close(void)
+{
+    int rc;
 
     rc = chitcp_tester_client_close(tester);
     ck_assert_msg(rc == 0, "Tester client did not close()");

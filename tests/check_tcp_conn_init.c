@@ -114,10 +114,10 @@ START_TEST (test_3way_states)
     rc = chitcp_tester_client_set_debug(tester, check_states,
             DBG_EVT_TCP_STATE_CHANGE);
 
-    tester_run();
+    tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
 }
 END_TEST
 
@@ -131,10 +131,10 @@ START_TEST (test_3way_vars)
     rc = chitcp_tester_client_set_debug(tester, check_vars,
             DBG_EVT_TCP_STATE_CHANGE);
 
-    tester_run();
+    tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
 }
 END_TEST
 
