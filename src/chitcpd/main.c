@@ -6,7 +6,7 @@
  *  The chitcpd executable accepts three command-line arguments:
  *
  *  -p PORT: The daemon's TCP port (default: 23300)
- *  -u FILE: The UNIX socket where local applications will be able to
+ *  -s FILE: The UNIX socket where local applications will be able to
  *           send requests to the chiTCP daemon
  *  -v: Be verbose. Can be repeated up to three times for extra verbosity.
  *
@@ -91,6 +91,9 @@ int main(int argc, char *argv[])
         case 'v':
             verbosity++;
             break;
+        case 'h':
+            printf("Usage: chitcpd [-p PORT] [-s UNIX_SOCKET] [(-v|-vv|-vvv)]\n");
+            exit(0);
         default:
             printf("ERROR: Unknown option -%c\n", opt);
             exit(-1);
