@@ -73,6 +73,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__RECV);
 HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE);
 HANDLER_FUNCTION(CHITCPD_MSG_CODE__GET_SOCKET_STATE);
 HANDLER_FUNCTION(CHITCPD_MSG_CODE__GET_SOCKET_BUFFER_CONTENTS);
+HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE);
 
 /* Handling DEBUG requires a slightly modified prototype */
 int chitcpd_handle_CHITCPD_MSG_CODE__DEBUG(serverinfo_t *si, ChitcpdMsg *req, ChitcpdMsg *resp_outer, ChitcpdResp *resp_inner, int client_sockfd);
@@ -88,7 +89,8 @@ handler_function handlers[] =
     HANDLER_ENTRY(CHITCPD_MSG_CODE__RECV),
     HANDLER_ENTRY(CHITCPD_MSG_CODE__CLOSE),
     HANDLER_ENTRY(CHITCPD_MSG_CODE__GET_SOCKET_STATE),
-    HANDLER_ENTRY(CHITCPD_MSG_CODE__GET_SOCKET_BUFFER_CONTENTS)
+    HANDLER_ENTRY(CHITCPD_MSG_CODE__GET_SOCKET_BUFFER_CONTENTS),
+    HANDLER_ENTRY(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
 };
 
 static char *code_strs[] =
@@ -105,7 +107,8 @@ static char *code_strs[] =
     "GET_SOCKET_BUFFER_CONTENTS",
     "RESP",
     "DEBUG",
-    "DEBUG_EVENT"
+    "DEBUG_EVENT",
+    "WAIT_FOR_STATE"
 };
 
 static inline char *handler_code_string (int code)
@@ -1341,3 +1344,57 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__GET_SOCKET_BUFFER_CONTENTS)
     return CHITCP_OK;
 }
 
+
+/* Handler for chitcpd_wait_for_state() */
+HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
+{
+    chisocket_t sockfd;
+    int ret, error_code = 0;
+    tcp_state_t tcp_state;
+    ChitcpdWaitForStateArgs *req;
+
+    chilog(TRACE, ">>> Entering handler for CHITCPD_MSG_CODE__WAIT_FOR_STATE");
+
+    /* Unpack request */
+    assert(req_msg->wait_for_state_args != NULL);
+    req = req_msg->wait_for_state_args;
+
+    sockfd = req->sockfd;
+    tcp_state = req->tcp_state;
+
+    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available || si->chisocket_table[sockfd].actpas_type != SOCKET_ACTIVE)
+    {
+        chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
+        ret = -1;
+        error_code = EBADF;
+        goto done;
+    }
+    chisocketentry_t *entry = &si->chisocket_table[sockfd];
+
+    if(!IS_VALID_TCP_STATE(tcp_state))
+    {
+        chilog(ERROR, "Not a valid TCP state: %i", tcp_state);
+        ret = -1;
+        error_code = EINVAL;
+        goto done;
+    }
+
+    chilog(TRACE, "Socket %i is %s. Waiting for %s.", sockfd, tcp_str(entry->tcp_state), tcp_str(tcp_state));    pthread_mutex_lock(&entry->lock_tcp_state);
+    while(entry->tcp_state != tcp_state)
+    {
+        pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
+        chilog(TRACE, "Socket %i is %s. Waiting for %s.", sockfd, tcp_str(entry->tcp_state), tcp_str(tcp_state));
+    }
+    pthread_mutex_unlock(&entry->lock_tcp_state);
+
+    ret = 0;
+
+ done:
+    /* Create response */
+    resp->ret = ret;
+    resp->error_code = error_code;
+
+    chilog(TRACE, "<<< Exiting handler for CHITCPD_MSG_CODE__WAIT_FOR_STATE");
+
+    return CHITCP_OK;
+}

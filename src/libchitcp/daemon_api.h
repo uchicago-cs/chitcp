@@ -46,6 +46,10 @@
 
 #include "protobuf-wrapper.h"
 
+#define CHITCPD_FAIL(msg) { \
+    fprintf(stderr, "%s: " msg "\n", __func__); \
+    errno = EPROTO; \
+    return -1; }
 
 int chitcpd_get_socket();
 

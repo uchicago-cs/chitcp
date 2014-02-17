@@ -550,3 +550,40 @@ debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffer
     return ret;
 }
 
+
+int chitcpd_wait_for_state(int sockfd, tcp_state_t tcp_state)
+{
+    ChitcpdMsg req = CHITCPD_MSG__INIT;
+    ChitcpdWaitForStateArgs wfsa = CHITCPD_WAIT_FOR_STATE_ARGS__INIT;
+    ChitcpdMsg *resp_p;
+    int ret, error_code;
+    int rc;
+
+    int daemon_socket = chitcpd_get_socket();
+    if (daemon_socket < 0)
+        CHITCPD_FAIL("Error when connecting to chiTCP daemon.")
+
+    /* Create request */
+    req.code = CHITCPD_MSG_CODE__WAIT_FOR_STATE;
+    req.wait_for_state_args = &wfsa;
+
+    wfsa.sockfd = sockfd;
+    wfsa.tcp_state = tcp_state;
+
+    rc = chitcpd_send_command(daemon_socket, &req, &resp_p);
+
+    if(rc != CHITCP_OK)
+        CHITCPD_FAIL("Error when communicating with chiTCP daemon.");
+
+    /* Unpack response */
+    assert(resp_p->resp != NULL);
+    ret = resp_p->resp->ret;
+    error_code = resp_p->resp->error_code;
+
+    chitcpd_msg__free_unpacked(resp_p, NULL);
+
+    ret = (error_code? -1 : ret);
+    if(error_code) errno = error_code;
+
+    return ret;
+}

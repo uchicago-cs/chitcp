@@ -193,4 +193,7 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler);
  * Returns NULL if SOCKFD is invalid (in particular, if SOCKFD is not active). */
 debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffers);
 
+
+int chitcpd_wait_for_state(int sockfd, tcp_state_t tcp_state);
+
 #endif /* __CHITCPD_DEBUG_API__H_ */

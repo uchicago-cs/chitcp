@@ -16,6 +16,7 @@ enum ChitcpdMsgCode {
     RESP = 11;
     DEBUG = 12;
     DEBUG_EVENT = 13;
+    WAIT_FOR_STATE = 14;
 }
 
 message ChitcpdMsg {
@@ -33,6 +34,7 @@ message ChitcpdMsg {
     optional ChitcpdResp resp = 12;
     optional ChitcpdDebugArgs debug_args = 13;
     optional ChitcpdDebugEventArgs debug_event_args = 14;
+    optional ChitcpdWaitForStateArgs wait_for_state_args = 15;
 }
 
 message ChitcpdSocketArgs {
@@ -93,6 +95,11 @@ message ChitcpdGetSocketStateArgs {
 
 message ChitcpdGetSocketBufferContentsArgs {
     required int32 sockfd = 1;
+}
+
+message ChitcpdWaitForStateArgs {
+    required int32 sockfd = 1;
+    required int32 tcp_state = 2;
 }
 
 /* A message containing detailed information about an active chisocket */

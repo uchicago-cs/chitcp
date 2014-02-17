@@ -131,4 +131,6 @@ typedef enum {
     LAST_ACK,
 } tcp_state_t;
 
+#define IS_VALID_TCP_STATE(x) ((x) >= CLOSED && (x) <= LAST_ACK)
+
 #endif

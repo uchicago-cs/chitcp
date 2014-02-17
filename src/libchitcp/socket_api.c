@@ -56,11 +56,6 @@
 #include "chitcp/types.h"
 #include "daemon_api.h"
 
-#define CHITCPD_FAIL(msg) { \
-    fprintf(stderr, "%s: " msg "\n", __func__); \
-    errno = EPROTO; \
-    return -1; }
-
 int chisocket_socket(int domain, int type, int protocol)
 {
     ChitcpdMsg req = CHITCPD_MSG__INIT;
