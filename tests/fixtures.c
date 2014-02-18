@@ -14,11 +14,33 @@ chitcp_tester_t *tester;
 void chitcpd_and_tester_setup(void)
 {
     int rc;
+    char *loglevel;
 
     si = calloc(1, sizeof(serverinfo_t));
     si->server_port = chitcp_htons(GET_CHITCPD_PORT);
     si->server_socket_path = GET_CHITCPD_SOCK;
-    chitcp_setloglevel(CRITICAL);
+
+    loglevel = getenv("LOG");
+
+    if(loglevel)
+    {
+        if (!strcmp(loglevel, "CRITICAL"))
+            chitcp_setloglevel(CRITICAL);
+        else if (!strcmp(loglevel, "ERROR"))
+            chitcp_setloglevel(ERROR);
+        else if (!strcmp(loglevel, "WARNING"))
+            chitcp_setloglevel(WARNING);
+        else if (!strcmp(loglevel, "INFO"))
+            chitcp_setloglevel(INFO);
+        else if (!strcmp(loglevel, "DEBUG"))
+            chitcp_setloglevel(DEBUG);
+        else if (!strcmp(loglevel, "TRACE"))
+            chitcp_setloglevel(TRACE);
+        else
+            chitcp_setloglevel(CRITICAL);
+    }
+    else
+        chitcp_setloglevel(CRITICAL);
 
     rc = chitcpd_server_init(si);
     ck_assert_msg(rc == 0, "Could not initialize chiTCP daemon.");
