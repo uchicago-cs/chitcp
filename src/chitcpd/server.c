@@ -296,7 +296,7 @@ int chitcpd_server_start_thread(serverinfo_t *si)
     /* Create server address */
     server_addr.sun_family = AF_UNIX;
     strcpy(server_addr.sun_path, si->server_socket_path);
-    len = strlen(server_addr.sun_path) + sizeof(server_addr.sun_family);
+    len = sizeof(struct sockaddr_un);
 
     /* Unlink socket. TODO: Check whether it already exists. */
     unlink(server_addr.sun_path);
