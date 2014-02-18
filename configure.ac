@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.68])
-AC_INIT([chitcp], [1.0], [borja@cs.uchicago.edu])
+AC_INIT([chitcp], [1.0], [do-not-email@example.org])
 AC_CONFIG_SRCDIR([src/chitcpd/main.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
