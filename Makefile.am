@@ -75,7 +75,7 @@ libchitcpd_la_SOURCES = \
 
 bin_PROGRAMS = chitcpd
 chitcpd_SOURCES = src/chitcpd/main.c 
-chitcpd_LDADD = libsimclist.la libchitcpd.la libchitcp.la -lrt
+chitcpd_LDADD = libsimclist.la libchitcpd.la libchitcp.la
 chitcpd_DEPENDENCIES = libsimclist.la libchitcpd.la src/chitcpd-protobuf/chitcpd.pb-c.h
 
 
