@@ -88,9 +88,10 @@ void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_sta
     pthread_mutex_lock(&entry->lock_tcp_state);
     entry->tcp_state = newstate;
     pthread_cond_signal(&entry->cv_tcp_state);
-    pthread_mutex_unlock(&entry->lock_tcp_state);
 
     chitcpd_debug_breakpoint(si, ptr_to_fd(si, entry), DBG_EVT_TCP_STATE_CHANGE, -1);
+
+    pthread_mutex_unlock(&entry->lock_tcp_state);
 
     if (newstate == CLOSED && entry->actpas_type == SOCKET_ACTIVE)
     {
