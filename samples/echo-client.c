@@ -144,7 +144,6 @@ int main(int argc, char *argv[])
 
             printf("echo> ");
             nread = getline(&buf, &buf_size, stdin);
-            printf("%i\n", nread);
             if(nread == -1)
                 break;
 
