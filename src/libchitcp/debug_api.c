@@ -191,6 +191,7 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler)
     if (rc < 0)
     {
         perror("chitcpd_debug");
+        close(sockfd);
         return -1;
     }
 
@@ -198,6 +199,7 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler)
     if (dbt_args == NULL)
     {
         /* malloc sets errno */
+        close(sockfd);
         return -1;
     }
     dbt_args->fd = daemon_fd;
@@ -207,6 +209,7 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler)
     {
         errno = rc;
         perror("pthread_create");
+        close(sockfd);
         return -1;
     }
 
@@ -356,6 +359,7 @@ static void *debug_thread(void *_args)
         free(item);
     }
     list_destroy(&active_list);
+    close(daemon_fd);
 
     return NULL;
 }

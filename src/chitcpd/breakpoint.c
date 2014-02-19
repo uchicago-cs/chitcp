@@ -121,9 +121,34 @@ enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockf
     dea.event_flag = event_flag;
     dea.new_sockfd = new_sockfd;
 
+    bool_t stop_debugging = FALSE;
+    int ret;
     r = chitcpd_send_and_recv_msg(debug_mon->sockfd, &req, &resp);
 
     if (r != CHITCP_OK)
+    {
+        stop_debugging = TRUE;
+        ret = DBG_RESP_NONE;
+    }
+    else
+    {
+        /* Unpack response */
+
+        assert(resp->resp != NULL);
+        ret = resp->resp->ret;
+        chitcpd_msg__free_unpacked(resp, NULL);
+
+        assert(ret >= 0);
+        if (ret == DBG_RESP_STOP)
+        {
+            stop_debugging = TRUE;
+            ret = DBG_RESP_NONE;
+        }
+        else
+            pthread_mutex_unlock(&debug_mon->lock_sockfd);
+    }
+
+    if (stop_debugging)
     {
         /* This debug connection is no longer valid. We must carefully
          * pass this information to all other threads which might try
@@ -158,23 +183,9 @@ enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockf
             pthread_mutex_destroy(&debug_mon->lock_numwaiters);
             free(debug_mon);
         }
-
-        chilog (DEBUG, "<<< Exiting breakpoint");
-        return DBG_RESP_NONE;
     }
-    else /* r == CHITCP_OK */
-    {
-        pthread_mutex_unlock(&debug_mon->lock_sockfd);
 
-        /* Unpack response */
-
-        assert(resp->resp != NULL);
-        int ret = resp->resp->ret;
-        chitcpd_msg__free_unpacked(resp, NULL);
-
-        assert(ret >= 0);
-        chilog (DEBUG, "<<< Exiting breakpoint");
-        return ret;
-    }
+    chilog (DEBUG, "<<< Exiting breakpoint");
+    return ret;
 }
 
