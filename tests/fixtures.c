@@ -92,5 +92,16 @@ void tester_close(void)
     ck_assert_msg(rc == 0, "Tester client did not close()");
 
     rc = chitcp_tester_server_close(tester);
-    ck_assert_msg(rc == 0, "Tester server did not run()");
+    ck_assert_msg(rc == 0, "Tester server did not close()");
+}
+
+void tester_done(void)
+{
+    int rc;
+
+    rc = chitcp_tester_client_exit(tester);
+    ck_assert_msg(rc == 0, "Tester client did not exit");
+
+    rc = chitcp_tester_server_exit(tester);
+    ck_assert_msg(rc == 0, "Tester server did not exit");
 }

@@ -44,12 +44,10 @@ enum chitcpd_debug_response check_states(int sockfd, enum chitcpd_debug_event ev
 
         chitcpd_debug_save_socket_state(state_info);
 
-        /*
         if (curs == ESTABLISHED)
             return DBG_RESP_STOP;
         else
             return DBG_RESP_NONE;
-        */
     }
 
     return DBG_RESP_NONE;
@@ -93,12 +91,11 @@ enum chitcpd_debug_response check_vars(int sockfd, enum chitcpd_debug_event even
 
         chitcpd_debug_save_socket_state(state_info);
 
-        /*
+
         if (curs == ESTABLISHED)
             return DBG_RESP_STOP;
         else
             return DBG_RESP_NONE;
-        */
     }
 
     return DBG_RESP_NONE;
@@ -118,6 +115,8 @@ START_TEST (test_3way_states)
 
     chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
     chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_done();
 }
 END_TEST
 
@@ -135,6 +134,8 @@ START_TEST (test_3way_vars)
 
     chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
     chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_done();
 }
 END_TEST
 
