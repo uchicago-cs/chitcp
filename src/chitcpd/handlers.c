@@ -134,6 +134,7 @@ void* chitcpd_handler_dispatch(void *args)
 
     serverinfo_t *si = ha->si;
     socket_t client_socket = ha->client_socket;
+    pthread_mutex_t *handler_lock = ha->handler_lock;
     ChitcpdMsg *req;
     ChitcpdMsg resp_outer = CHITCPD_MSG__INIT;
     ChitcpdResp resp_inner = CHITCPD_RESP__INIT;
@@ -153,6 +154,10 @@ void* chitcpd_handler_dispatch(void *args)
 
         chilog(TRACE, "Received request (code=%s)", handler_code_string(req->code));
 
+        /* We have received a request, so we grab the handler lock to
+         * prevent a race condition when the server is shutting down */
+        pthread_mutex_lock(handler_lock);
+
         /* Debug requests require special handling */
         if (req->code == CHITCPD_MSG_CODE__DEBUG)
         {
@@ -168,6 +173,7 @@ void* chitcpd_handler_dispatch(void *args)
             {
                 /* This function will not return except on error.
                  * (If successful, it calls pthread_exit().) */
+                pthread_mutex_unlock(handler_lock);
                 rc = chitcpd_handle_CHITCPD_MSG_CODE__DEBUG(
                          si, req, &resp_outer, &resp_inner, client_socket);
             }
@@ -215,6 +221,12 @@ void* chitcpd_handler_dispatch(void *args)
             resp_inner.socket_buffer_contents = NULL;
         }
 
+        /* We're done processing the request (we've run the handler and
+         * we've returned a response). We can release the handler lock and,
+         * if a shutdown is in progress, it will make sure it can proceed
+         * safely */
+        pthread_mutex_unlock(handler_lock);
+
         if (rc < 0)
             break;
 
@@ -225,7 +237,7 @@ void* chitcpd_handler_dispatch(void *args)
     if(si->state == CHITCPD_STATE_STOPPING)
         chilog(DEBUG, "chiTCP daemon is stopping. Freeing open sockets...");
     else
-    chilog(DEBUG, "Daemon client has disconnected. Freeing open sockets...");
+        chilog(DEBUG, "Daemon client has disconnected. Freeing open sockets...");
 
     for(int i=0; i < si->chisocket_table_size; i++)
     {
@@ -755,7 +767,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     /* If not, establish a connection with the peer's chiTCP daemon */
     if(connection == NULL)
     {
-        chilog(INFO, "No connection entry found");
+        chilog(DEBUG, "No connection entry found, creating one.");
         connection = chitcpd_create_connection(si, (struct sockaddr*) &addr);
     }
 

@@ -218,6 +218,8 @@ int chitcpd_server_start(serverinfo_t *si)
  */
 int chitcpd_server_wait(serverinfo_t *si)
 {
+    chilog(DEBUG, "Waiting for chiTCP daemon to stop.");
+
     /* TODO: Retrieve return values */
     pthread_join(si->server_thread, NULL);
     pthread_join(si->network_thread, NULL);
@@ -227,6 +229,8 @@ int chitcpd_server_wait(serverinfo_t *si)
     pthread_cond_broadcast(&si->cv_state);
     pthread_mutex_unlock(&si->lock_state);
 
+    chilog(DEBUG, "chiTCP daemon has fully stopped.");
+
     return CHITCP_OK;
 }
 
@@ -234,6 +238,8 @@ int chitcpd_server_wait(serverinfo_t *si)
 int chitcpd_server_stop(serverinfo_t *si)
 {
     int rc;
+
+    chilog(DEBUG, "Stopping the chiTCP daemon.");
 
     /* To stop the server, all we need to do is shutdown the server's
      * TCP and UNIX sockets. Once the server is running, its two
@@ -254,6 +260,8 @@ int chitcpd_server_stop(serverinfo_t *si)
     rc = shutdown(si->server_socket, SHUT_RDWR);
     if(rc != 0)
         return CHITCP_ESOCKET;
+
+    chilog(DEBUG, "chiTCP daemon is now in STOPPING state.");
 
     return CHITCP_OK;
 }
@@ -338,6 +346,7 @@ typedef struct handler_thread
 {
     pthread_t thread;
     socket_t handler_socket;
+    pthread_mutex_t handler_lock;
 } handler_thread_t;
 
 /*
@@ -382,6 +391,7 @@ void* chitcpd_server_thread_func(void *args)
 
         /* Accept a connection */
         handler_thread = malloc(sizeof(handler_thread_t));
+        pthread_mutex_init(&handler_thread->handler_lock, NULL);
         sunSize = sizeof(client_addr);
         if ((handler_thread->handler_socket = accept(si->server_socket, (struct sockaddr *)&client_addr, &sunSize)) == -1)
         {
@@ -399,6 +409,7 @@ void* chitcpd_server_thread_func(void *args)
 
         /* Create handler thread to handle this connection */
         ha->client_socket = handler_thread->handler_socket;
+        ha->handler_lock = &handler_thread->handler_lock;
         if (pthread_create(&handler_thread->thread, NULL, chitcpd_handler_dispatch, ha) != 0)
         {
             perror("Could not create a worker thread");
@@ -430,7 +441,13 @@ void* chitcpd_server_thread_func(void *args)
          * before an orderly shutdown and would be left lingering until
          * we call join here. */
         handler_thread_t *ht = list_fetch(&handler_thread_list);
+
+        /* We don't want to shutdown the handler's socket if an operation is
+         * in progress. The handler thread may have read a command, but
+         * not sent a response back yet */
+        pthread_mutex_lock(&ht->handler_lock);
         shutdown(ht->handler_socket, SHUT_RDWR);
+        pthread_mutex_unlock(&ht->handler_lock);
         pthread_join(ht->thread, NULL);
     }
 
