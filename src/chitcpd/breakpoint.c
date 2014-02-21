@@ -63,6 +63,15 @@ enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockf
     ChitcpdDebugEventArgs dea = CHITCPD_DEBUG_EVENT_ARGS__INIT;
     ChitcpdMsg *resp;
 
+    /* If the server is stopping, we don't process checkpoints. */
+    if(si->state != CHITCPD_STATE_RUNNING)
+    {
+        chilog(DEBUG, "Ignoring breakpoint (socket %d, event %s): Server is stopping", sockfd,
+               dbg_evt_str(event_flag));
+
+        return DBG_RESP_NONE;
+    }
+
     if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
     {
         chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
