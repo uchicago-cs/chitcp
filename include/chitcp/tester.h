@@ -176,4 +176,8 @@ int chitcp_tester_client_close(chitcp_tester_t* tester);
 int chitcp_tester_server_close(chitcp_tester_t* tester);
 
 
+
+int chitcp_tester_server_exit(chitcp_tester_t* tester);
+int chitcp_tester_client_exit(chitcp_tester_t* tester);
+
 #endif /* TESTER_H_ */

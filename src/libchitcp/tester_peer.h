@@ -13,6 +13,7 @@ typedef enum
     TEST_EVENT_CONNECT = 4,
     TEST_EVENT_RUN = 5,
     TEST_EVENT_CLOSE = 6,
+    TEST_EVENT_EXIT = 7,
 } test_event_t;
 
 typedef struct chitcp_tester_peer

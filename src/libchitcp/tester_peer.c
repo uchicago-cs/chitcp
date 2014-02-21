@@ -149,6 +149,8 @@ void* chitcp_tester_peer_thread_func(void *args)
             break;
         case TEST_EVENT_CLOSE:
             chitcp_tester_peer_close(tester, peer);
+            break;
+        case TEST_EVENT_EXIT:
             done = TRUE;
             break;
         }

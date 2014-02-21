@@ -159,3 +159,23 @@ int chitcp_tester_server_close(chitcp_tester_t* tester)
 {
     return chitcp_tester_peer_event(tester->server, TEST_EVENT_CLOSE);
 }
+
+
+/* See tester.h */
+int chitcp_tester_client_exit(chitcp_tester_t* tester)
+{
+    chitcp_tester_peer_event(tester->client, TEST_EVENT_EXIT);
+    pthread_join(tester->client->peer_thread, NULL);
+
+    return CHITCP_OK;
+}
+
+/* See tester.h */
+int chitcp_tester_server_exit(chitcp_tester_t* tester)
+{
+    chitcp_tester_peer_event(tester->server, TEST_EVENT_EXIT);
+    pthread_join(tester->server->peer_thread, NULL);
+
+    return CHITCP_OK;
+
+}
