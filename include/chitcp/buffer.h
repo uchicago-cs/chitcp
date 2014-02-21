@@ -343,8 +343,11 @@ int circular_buffer_available(circular_buffer_t *buf);
  * circular_buffer_close - Close the buffer
  *
  * When the buffer is closed, it will not accept any
- * more writes. Any pending write operations return 0
- * immediately, and reads are allowed to complete.
+ * more writes. All pending writes return immediately
+ * (with circular_buffer_write returning the number
+ * of bytes written before the buffer was closed)
+ * and all pending reads return immediately (with
+ * circular_buffer_read returning zero.
  *
  * buf: circular_buffer_t struct
  *
