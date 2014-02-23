@@ -182,7 +182,7 @@ typedef struct tcphdr
 #define SEG_WND(p) (chitcp_ntohs(TCP_PACKET_HEADER(p)->win))
 
 /* segment urgent pointer */
-#define SEG_UP(p) (chitcp_ntohs(TCP_PACKET_HEADER(p)->up))
+#define SEG_UP(p) (chitcp_ntohs(TCP_PACKET_HEADER(p)->urp))
 
 
 /*
