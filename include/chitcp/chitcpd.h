@@ -55,6 +55,6 @@
 #define GET_CHITCPD_PORT (atoi(GET_CHITCPD_PORT_STRING))
 
 /* Maximum payload of a chitcpd request/response */
-#define MAX_CHITCPD_PAYLOAD_SIZE (1024)
+#define MAX_CHITCPD_PAYLOAD_SIZE (16384)
 
 #endif /* CHITCP_CHITCPD_H_ */
