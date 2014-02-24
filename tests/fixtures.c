@@ -84,6 +84,17 @@ void tester_connect(void)
     ck_assert_msg(rc == 0, "Tester did not connect()");
 }
 
+void tester_run(void)
+{
+    int rc;
+
+    rc = chitcp_tester_server_run(tester);
+    ck_assert_msg(rc == 0, "Tester server did not run");
+
+    rc = chitcp_tester_client_run(tester);
+    ck_assert_msg(rc == 0, "Tester client did not run");
+}
+
 void tester_close(void)
 {
     int rc;
