@@ -9,6 +9,7 @@
 #include <check.h>
 
 Suite* make_connection_init_suite (void);
+Suite* make_data_transfer_suite (void);
 
 
 int main (void)
@@ -17,7 +18,7 @@ int main (void)
     int number_failed;
 
     sr = srunner_create (make_connection_init_suite ());
-    //srunner_add_suite (sr, make_list_suite ());
+    srunner_add_suite (sr, make_data_transfer_suite ());
 
     srunner_run_all (sr, CK_NORMAL);
     number_failed = srunner_ntests_failed (sr);

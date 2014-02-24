@@ -123,6 +123,7 @@ tests_check_chitcpd_DEPENDENCIES = libchitcpd.la
 tests_check_tcp_SOURCES = \
                                tests/check_tcp.c \
                                tests/check_tcp_conn_init.c \
+                               tests/check_tcp_data_transfer.c \
                                tests/fixtures.c
 tests_check_tcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd 
 tests_check_tcp_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
