@@ -12,6 +12,8 @@ typedef struct chitcp_tester
 } chitcp_tester_t;
 
 
+typedef int (*chitcp_tester_runnable)(int sockfd, void *args);
+
 /*
  * chitcp_tester_init - Initializes a tester
  *
@@ -146,6 +148,36 @@ int chitcp_tester_server_accept(chitcp_tester_t* tester);
  *  - CHITCP_ESYNC: Unable to signal client thread
  */
 int chitcp_tester_client_connect(chitcp_tester_t* tester);
+
+
+/*
+ * chitcp_tester_client_run_set - Specify a function for the client to run
+ *
+ *
+ * tester: Tester data structure
+ *
+ * func: Function to run
+ *
+ * Returns:
+ *  - CHITCP_OK: Function set correctly
+ */
+int chitcp_tester_client_run_set(chitcp_tester_t* tester, chitcp_tester_runnable func, void *args);
+
+
+/*
+ * chitcp_tester_client_run - Run the client's functions
+ *
+ * tester: Tester data structure
+ *
+ * Returns:
+ *  - CHITCP_OK: Function set correctly
+ */
+int chitcp_tester_client_run(chitcp_tester_t* tester);
+
+
+/* Same as above, but for the server */
+int chitcp_tester_server_run_set(chitcp_tester_t* tester, chitcp_tester_runnable func, void *args);
+int chitcp_tester_server_run(chitcp_tester_t* tester);
 
 
 /*

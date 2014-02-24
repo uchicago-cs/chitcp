@@ -65,8 +65,25 @@ void chitcp_tester_peer_listen(chitcp_tester_t *tester, chitcp_tester_peer_t *pe
         chisocket_close(peer->sockfd);
         exit(-1);
     }
-
 }
+
+void chitcp_tester_peer_accept(chitcp_tester_t *tester, chitcp_tester_peer_t *peer)
+{
+    socklen_t sinSize = sizeof(struct sockaddr_in);
+    struct sockaddr_in clientAddr;
+    int clientSocket = -1;
+
+    sinSize = sizeof(struct sockaddr_in);
+    if( (clientSocket = chisocket_accept(peer->sockfd, (struct sockaddr *) &clientAddr, &sinSize)) == -1)
+    {
+        perror("Socket accept() failed");
+        chisocket_close(peer->sockfd);
+        exit(-1);
+    }
+    peer->passive_sockfd = peer->sockfd;
+    peer->sockfd = clientSocket;
+}
+
 
 void chitcp_tester_peer_connect(chitcp_tester_t *tester, chitcp_tester_peer_t *peer)
 {
@@ -102,7 +119,6 @@ void chitcp_tester_peer_close(chitcp_tester_t *tester, chitcp_tester_peer_t *pee
             exit(-1);
         }
     }
-
 }
 
 
@@ -113,11 +129,11 @@ void* chitcp_tester_peer_thread_func(void *args)
     chitcp_tester_peer_t *peer;
     bool_t done = FALSE;
 
+    peer_state_t prev_state, new_state;
+
     tpta = (test_peer_thread_args_t*) args;
     tester = tpta->tester;
     peer = tpta->peer;
-
-    int clientSocket = -1;
 
     while(!done)
     {
@@ -133,74 +149,100 @@ void* chitcp_tester_peer_thread_func(void *args)
             break;
         case TEST_EVENT_INIT:
             chitcp_tester_peer_init(tester, peer);
+            chitcp_tester_peer_update_state(peer, STATE_INITIALIZED);
             break;
         case TEST_EVENT_LISTEN:
             chitcp_tester_peer_listen(tester, peer);
+            chitcp_tester_peer_update_state(peer, STATE_SERVER_LISTENING);
             break;
         case TEST_EVENT_ACCEPT:
-            /* Do nothing. Accept is special (see below) */
+            chitcp_tester_peer_accept(tester, peer);
+            chitcp_tester_peer_update_state(peer, STATE_SERVER_READY);
             break;
         case TEST_EVENT_CONNECT:
             chitcp_tester_peer_connect(tester, peer);
+            chitcp_tester_peer_update_state(peer, STATE_CLIENT_READY);
             break;
         case TEST_EVENT_RUN:
-            printf("Running peer\n");
-
+            prev_state = peer->state;
+            chitcp_tester_peer_update_state(peer, STATE_RUNNING_FUNCTION);
+            if (peer->func)
+                peer->func(peer->sockfd, peer->func_args);
+            chitcp_tester_peer_update_state(peer, prev_state);
             break;
         case TEST_EVENT_CLOSE:
+            prev_state = peer->state;
+            if(prev_state == STATE_SERVER_READY)
+            {
+                chitcp_tester_peer_update_state(peer, STATE_SERVER_CLOSING);
+                new_state = STATE_SERVER_CLOSED;
+            }
+            else if(prev_state == STATE_CLIENT_READY)
+            {
+                chitcp_tester_peer_update_state(peer, STATE_CLIENT_CLOSING);
+                new_state = STATE_CLIENT_CLOSED;
+            }
+            else
+                new_state = prev_state;
             chitcp_tester_peer_close(tester, peer);
+            chitcp_tester_peer_update_state(peer, new_state);
             break;
         case TEST_EVENT_EXIT:
             done = TRUE;
             break;
         }
 
-        if(peer->event == TEST_EVENT_ACCEPT)
-        {
-            peer->event = TEST_EVENT_NONE;
-            pthread_cond_signal(&peer->cv_event);
-            pthread_mutex_unlock(&peer->lock_event);
-
-            socklen_t sinSize = sizeof(struct sockaddr_in);
-            struct sockaddr_in clientAddr;
-
-            sinSize = sizeof(struct sockaddr_in);
-            if( (clientSocket = chisocket_accept(peer->sockfd, (struct sockaddr *) &clientAddr, &sinSize)) == -1)
-            {
-                perror("Socket accept() failed");
-                chisocket_close(peer->sockfd);
-                exit(-1);
-            }
-            peer->passive_sockfd = peer->sockfd;
-            peer->sockfd = clientSocket;
-        }
-        else
-        {
-            peer->event = TEST_EVENT_NONE;
-            pthread_cond_signal(&peer->cv_event);
-            pthread_mutex_unlock(&peer->lock_event);
-        }
-
+        peer->event = TEST_EVENT_NONE;
+        pthread_cond_signal(&peer->cv_event);
+        pthread_mutex_unlock(&peer->lock_event);
     }
 
     return NULL;
 }
 
+int chitcp_tester_peer_update_state(chitcp_tester_peer_t* peer, peer_state_t state)
+{
+    RET_ON_ERROR(pthread_mutex_lock(&peer->lock_state),
+            CHITCP_ESYNC);
+    peer->state = state;
+    RET_ON_ERROR(pthread_cond_signal(&peer->cv_state),
+                CHITCP_ESYNC);
+    RET_ON_ERROR(pthread_mutex_unlock(&peer->lock_state),
+            CHITCP_ESYNC);
+
+    return CHITCP_OK;
+}
+
+int chitcp_tester_peer_wait_for_state(chitcp_tester_peer_t* peer, peer_state_t state)
+{
+    RET_ON_ERROR(pthread_mutex_lock(&peer->lock_state),
+            CHITCP_ESYNC);
+    while(peer->state != state)
+    {
+        RET_ON_ERROR(pthread_cond_wait(&peer->cv_state, &peer->lock_state),
+                CHITCP_ESYNC);
+    }
+    RET_ON_ERROR(pthread_mutex_unlock(&peer->lock_state),
+            CHITCP_ESYNC);
+
+    return CHITCP_OK;
+
+}
 
 int chitcp_tester_peer_event(chitcp_tester_peer_t* peer, test_event_t event)
 {
     RET_ON_ERROR(pthread_mutex_lock(&peer->lock_event),
-            CHITCP_ESYNC);
-
-    peer->event = event;
-
-    RET_ON_ERROR(pthread_cond_signal(&peer->cv_event),
             CHITCP_ESYNC);
     while(peer->event != TEST_EVENT_NONE)
     {
         RET_ON_ERROR(pthread_cond_wait(&peer->cv_event, &peer->lock_event),
                 CHITCP_ESYNC);
     }
+
+    peer->event = event;
+
+    RET_ON_ERROR(pthread_cond_signal(&peer->cv_event),
+            CHITCP_ESYNC);
     RET_ON_ERROR(pthread_mutex_unlock(&peer->lock_event),
             CHITCP_ESYNC);
 
