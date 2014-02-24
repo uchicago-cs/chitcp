@@ -13,28 +13,9 @@
 #include "chitcp/socket.h"
 #include "chitcp/types.h"
 #include "chitcp/addr.h"
+#include "chitcp/utils.h"
 
 const char* USAGE = "echo-server [-p PORT] [-s] [-v]";
-
-int sockSend(int socket, char *buffer, int length)
-{
-  int nbytes, nleft, nwritten = 0;
-
-  nleft = length;
-
-  while ( nleft > 0 )
-  {
-      if ( (nbytes = chisocket_send(socket, buffer, nleft, 0)) == -1 )
-      {
-          perror("Could not send message");
-          return -1;
-      }
-      nleft  -= nbytes;
-      buffer += nbytes;
-      nwritten += nbytes;
-  }
-  return nwritten;
-}
 
 int main(int argc, char *argv[])
 {
@@ -73,7 +54,7 @@ int main(int argc, char *argv[])
     if(!port)
         iport = 7;
     else
-        sscanf(port, "%u", &iport);
+        sscanf(port, "%hu", &iport);
 
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(iport); // The echo protocol
@@ -143,11 +124,11 @@ int main(int argc, char *argv[])
     chitcp_addr_str((struct sockaddr *) &clientAddr, addr_str, sizeof(addr_str));
     printf("Got a connection from %s\n", addr_str);
 
-    char buf[257];
+    char buf[536 + 1];
 
     while(1)
     {
-        int nbytes = chisocket_recv(clientSocket, buf, 256, 0);
+        int nbytes = chisocket_recv(clientSocket, buf, 536, 0);
         if(nbytes == 0)
         {
             break;
@@ -165,7 +146,7 @@ int main(int argc, char *argv[])
             {
                 printf("Received: %.*s\n", nbytes, buf);
             }
-            if (sockSend(clientSocket, buf, nbytes) == -1)
+            if (chitcp_socket_send(clientSocket, buf, nbytes) == -1)
             {
                 chisocket_close(clientSocket);
                 chisocket_close(serverSocket);

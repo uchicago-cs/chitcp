@@ -15,28 +15,9 @@
 #include "chitcp/packet.h"
 #include "chitcp/types.h"
 #include "chitcp/addr.h"
+#include "chitcp/utils.h"
 
 const char* USAGE = "echo-client [-h HOSTNAME] [-p PORT] [-m MESSAGE | -f FILE] [-s]";
-
-int sockSend(int socket, char *buffer, int length)
-{
-  int nbytes, nleft, nwritten = 0;
-
-  nleft = length;
-
-  while ( nleft > 0 )
-  {
-      if ( (nbytes = chisocket_send(socket, buffer, nleft, 0)) == -1 )
-      {
-          perror("Could not send message");
-          return -1;
-      }
-      nleft  -= nbytes;
-      buffer += nbytes;
-      nwritten += nbytes;
-  }
-  return nwritten;
-}
 
 int main(int argc, char *argv[])
 {
@@ -124,7 +105,7 @@ int main(int argc, char *argv[])
 
     if(msg)
     {
-        if (sockSend(clientSocket, msg, strlen(msg)) == -1)
+        if (chitcp_socket_send(clientSocket, msg, strlen(msg)) == -1)
         {
             chisocket_close(clientSocket);
             exit(-1);
@@ -140,49 +121,40 @@ int main(int argc, char *argv[])
         while(1)
         {
             int nrecv;
-            char *recv_buf, *recv_buf_ptr;
+            char *recv_buf;
 
             printf("echo> ");
             nread = getline(&buf, &buf_size, stdin);
             if(nread == -1)
                 break;
 
-            if ( sockSend(clientSocket, buf, nread) == -1 )
+            if ( chitcp_socket_send(clientSocket, buf, nread) == -1 )
             {
                 chisocket_close(clientSocket);
                 exit(-1);
             }
 
             recv_buf = malloc(nread);
-            recv_buf_ptr = recv_buf;
-            nrecv = nread;
 
-            while (nrecv != 0)
+            nrecv = chitcp_socket_recv(clientSocket, recv_buf, nread);
+
+            if (nrecv == -1)
             {
-                int nbytes = chisocket_recv(clientSocket, recv_buf_ptr, nrecv, 0);
-                if(nbytes == 0)
-                {
-                    break;
-                }
-                else if (nbytes == -1)
-                {
-                    perror("Socket recv() failed");
-                    chisocket_close(clientSocket);
-                    exit(-1);
-                }
-                else
-                {
-                    recv_buf_ptr += nbytes;
-                    nrecv -= nbytes;
-                }
+                chisocket_close(clientSocket);
+                exit(-1);
             }
-
-            if (memcmp(buf, recv_buf, nread) != 0)
+            else if (nrecv != nread)
             {
-                printf("Echo from server did not match");
+                printf("Sent %i bytes but got %i back\n", nread, nrecv);
+            }
+            else if (memcmp(buf, recv_buf, nread) != 0)
+            {
+                printf("Echo from server did not match\n");
             }
             else
                 printf("%.*s", nread, recv_buf);
+
+            free(recv_buf);
         }
     }
 
