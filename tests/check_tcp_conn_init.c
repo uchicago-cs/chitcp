@@ -126,9 +126,11 @@ START_TEST (test_3way_vars)
 
     rc = chitcp_tester_server_set_debug(tester, check_vars,
             DBG_EVT_PENDING_CONNECTION| DBG_EVT_TCP_STATE_CHANGE);
+    ck_assert_msg(rc == 0, "Error setting debug handler (server)");
 
     rc = chitcp_tester_client_set_debug(tester, check_vars,
             DBG_EVT_TCP_STATE_CHANGE);
+    ck_assert_msg(rc == 0, "Error setting debug handler (client)");
 
     tester_connect();
 
