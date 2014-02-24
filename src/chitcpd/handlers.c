@@ -1187,24 +1187,30 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
     pthread_mutex_unlock(&socket_state->lock_event);
 
     /* Wait for socket to enter a valid closing state */
-    tcp_state_t waitfor;
-    if (entry->tcp_state == ESTABLISHED)
-        /* TODO: According to RFC 793, we actually shouldn't return from close()
-         * until we're in FIN_WAIT_2 *and* the retransmission queue is empty */
-        waitfor = FIN_WAIT_2;
-    else if (entry->tcp_state == CLOSE_WAIT)
-        waitfor = LAST_ACK;
-    else
+    if (! (entry->tcp_state == CLOSE_WAIT || entry->tcp_state == ESTABLISHED))
     {
-        chilog(ERROR, "Socket entered an inconsistent state (should be ESTABLISHED or CLOSE_WAIT)");
+        chilog(ERROR, "Socket entered an inconsist"
+                "ent state (should be ESTABLISHED or CLOSE_WAIT)");
         ret = -1;
         error_code = EBADF;
         goto done;
     }
 
     chilog(TRACE, "Waiting for closing state...");
-    while(entry->tcp_state != waitfor)
-        pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
+
+    if (entry->tcp_state == ESTABLISHED)
+    {
+        /* TODO: According to RFC 793, we actually shouldn't return from close()
+         * until we're in FIN_WAIT_2 *and* the retransmission queue is empty.
+         * However, a simultaneous close could land us in CLOSING or TIME_WAIT */
+        while(! (entry->tcp_state == FIN_WAIT_2 || entry->tcp_state == CLOSING || entry->tcp_state == TIME_WAIT ))
+            pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
+    }
+    else if (entry->tcp_state == CLOSE_WAIT)
+    {
+        while( entry->tcp_state != LAST_ACK )
+            pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
+    }
     pthread_mutex_unlock(&entry->lock_tcp_state);
 
     chilog(TRACE, "Socket connection is closing");
