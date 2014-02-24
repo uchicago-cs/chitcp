@@ -193,6 +193,7 @@ tcpconnentry_t* chitcpd_get_connection(serverinfo_t *si, struct sockaddr* addr)
 
     tcpconnentry_t *ret = NULL;
 
+    pthread_mutex_lock(&si->lock_connection_table);
     /* Find connection in connection table table */
     for(int i=0; i < si->connection_table_size; i++)
     {
@@ -205,6 +206,7 @@ tcpconnentry_t* chitcpd_get_connection(serverinfo_t *si, struct sockaddr* addr)
             }
         }
     }
+    pthread_mutex_unlock(&si->lock_connection_table);
 
     return ret;
 }

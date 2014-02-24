@@ -118,6 +118,7 @@ int chitcpd_server_init(serverinfo_t *si)
     si->ephemeral_port_start = DEFAULT_EPHEMERAL_PORT_START;
 
     /* Initialize chisocket table */
+    pthread_mutex_init(&si->lock_chisocket_table, NULL);
     si->chisocket_table = calloc(si->chisocket_table_size, sizeof(chisocketentry_t));
 
     if(si->chisocket_table == NULL)
@@ -134,6 +135,7 @@ int chitcpd_server_init(serverinfo_t *si)
 
 
     /* Initialize connection table */
+    pthread_mutex_init(&si->lock_connection_table, NULL);
     si->connection_table = calloc(si->connection_table_size, sizeof(tcpconnentry_t));
 
     if(si->connection_table == NULL)

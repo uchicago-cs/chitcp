@@ -110,6 +110,8 @@ int chitcpd_allocate_socket(serverinfo_t *si, int *socket_index)
     int ret;
     chisocketentry_t *entry = NULL;
 
+    pthread_mutex_lock(&si->lock_chisocket_table);
+
     /* Find available slot in socket table */
     for(int i=0; i < si->chisocket_table_size; i++)
     {
@@ -122,6 +124,7 @@ int chitcpd_allocate_socket(serverinfo_t *si, int *socket_index)
             break;
         }
     }
+    pthread_mutex_unlock(&si->lock_chisocket_table);
 
     if(entry == NULL)
     {

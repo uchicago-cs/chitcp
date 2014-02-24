@@ -255,10 +255,12 @@ typedef struct serverinfo
     /* Connections to other chiTCP daemons */
     uint16_t connection_table_size;
     tcpconnentry_t *connection_table;
+    pthread_mutex_t lock_connection_table;
 
     /* Socket table */
     uint16_t chisocket_table_size;
     chisocketentry_t *chisocket_table;
+    pthread_mutex_t lock_chisocket_table;
 
     /* Table of pointers to socket entries.
      * If an entry is NULL, the port is available.
