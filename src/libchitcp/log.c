@@ -175,7 +175,7 @@ void chilog_hex (loglevel_t level, void *data, int len)
     char buf[8];
     char ascii[17];
     char line[74];
-    char *pc = data;
+    uint8_t *pc = data;
 
     line[0] = '\0';
     // Process every byte in the data.
