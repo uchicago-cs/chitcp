@@ -52,6 +52,7 @@ libchitcp_la_SOURCES = \
                         src/libchitcp/daemon_api.c \
                         src/libchitcp/log.c \
                         src/libchitcp/addr.c \
+                        src/libchitcp/utils.c \
                         src/libchitcp/debug_api.c \
                         src/libchitcp/tester.c \
                         src/libchitcp/tester_peer.c \
