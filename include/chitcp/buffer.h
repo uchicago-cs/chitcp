@@ -143,28 +143,28 @@
 #define BUFFER_NONBLOCKING (0)
 #define BUFFER_BLOCKING (1)
 
+#include <pthread.h>
 
-/*
- * The provided buffer implementation will allow your TCP implementation
- * to work with short data streams (less than 32KB) but will fail for
- * streams larger than that.
- *
- * In particular, the provided implementation does not implement a
- * circular buffer structure, and simply hardcodes a large static
- * array (regardless of what buffer capacity is specified) that
- * does not wrap around. The provided implementation is also non-blocking.
- */
 typedef struct circular_buffer
 {
-    uint8_t data[32768];
+    uint8_t *data;
 
     uint32_t seq_initial;
     uint32_t seq_start;
     uint32_t seq_end;
 
-    uint32_t maxsize;
     uint32_t start;
     uint32_t end;
+
+    uint32_t count;
+
+    bool_t closed;
+
+    pthread_mutex_t lock;
+    pthread_cond_t cv_notfull;
+    pthread_cond_t cv_notempty;
+
+    uint32_t maxsize;
 } circular_buffer_t;
 
 
@@ -347,7 +347,7 @@ int circular_buffer_available(circular_buffer_t *buf);
  * (with circular_buffer_write returning the number
  * of bytes written before the buffer was closed)
  * and all pending reads return immediately (with
- * circular_buffer_read returning zero.
+ * circular_buffer_read returning zero).
  *
  * buf: circular_buffer_t struct
  *

@@ -45,12 +45,19 @@
 
 int circular_buffer_init(circular_buffer_t *buf, uint32_t maxsize)
 {
+    buf->data = malloc(maxsize);
     buf->start = 0;
     buf->end = 0;
+    buf->count = 0;
     buf->seq_initial = 0;
     buf->seq_start = 0;
     buf->seq_end = 0;
     buf->maxsize = maxsize;
+    buf->closed = FALSE;
+
+    pthread_mutex_init(&buf->lock, NULL);
+    pthread_cond_init(&buf->cv_notempty, NULL);
+    pthread_cond_init(&buf->cv_notfull, NULL);
 
     return CHITCP_OK;
 }
@@ -67,44 +74,133 @@ int circular_buffer_set_seq_initial(circular_buffer_t *buf, uint32_t seq_initial
 
 int circular_buffer_write(circular_buffer_t *buf, uint8_t *data, uint32_t len, bool_t blocking)
 {
-    memcpy(buf->data + buf->end, data, len);
-    buf->end += len;
-    buf->seq_end += len;
+    if(len <= 0)
+        return CHITCP_EINVAL;
 
-    return len;
+    pthread_mutex_lock(&buf->lock);
+    if(buf->count + len > buf->maxsize && !blocking)
+    {
+        pthread_mutex_unlock(&buf->lock);
+        return CHITCP_EWOULDBLOCK;
+    }
+
+    int written = 0;
+
+    /* We don't allow writes that are larger than the size of the buffer */
+    if (len > buf->maxsize)
+        len = buf->maxsize;
+
+    while (written < len)
+    {
+        while(buf->count == buf->maxsize)
+            pthread_cond_wait(&buf->cv_notfull, &buf->lock);
+
+        int towrite;
+
+        if (len - written < buf->maxsize - buf->count)
+            towrite = len - written;
+        else
+            towrite = buf->maxsize - buf->count;
+
+        if(buf->end + towrite > buf->maxsize)
+        {
+            int to_max = buf->maxsize - buf->end;
+            int after_max = towrite - to_max;
+
+            memcpy(buf->data + buf->end, data + written, to_max);
+            memcpy(buf->data, data + written + to_max, after_max);
+
+            buf->end = after_max;
+        }
+        else
+        {
+            memcpy(buf->data + buf->end, data + written, towrite);
+            buf->end += towrite;
+        }
+
+        written += towrite;
+        buf->count += towrite;
+        buf->seq_end += towrite;
+    }
+
+    pthread_cond_signal(&buf->cv_notempty);
+    pthread_mutex_unlock(&buf->lock);
+
+    return written;
 }
 
+int __circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, bool_t blocking, bool_t peeking)
+{
+    if(len <= 0)
+        return CHITCP_EINVAL;
+
+    pthread_mutex_lock(&buf->lock);
+    if(buf->count == 0 && !blocking)
+    {
+        pthread_mutex_unlock(&buf->lock);
+        return CHITCP_EWOULDBLOCK;
+    }
+
+    while(buf->count == 0 && !buf->closed)
+        pthread_cond_wait(&buf->cv_notempty, &buf->lock);
+
+    if(buf->closed && buf->count == 0)
+    {
+        pthread_mutex_unlock(&buf->lock);
+        return 0;
+    }
+
+    int toread;
+    int start = buf->start;
+
+    /* We're not going to read more than the number
+     * of bytes stored in the buffer */
+    if(len < buf->count)
+        toread = len;
+    else
+        toread = buf->count;
+
+    if(start + toread > buf->maxsize)
+    {
+        int to_max = buf->maxsize - start;
+        int after_max = toread - to_max;
+
+        if(dst)
+        {
+            memcpy(dst, buf->data + start, to_max);
+            memcpy(dst+to_max, buf->data, after_max);
+        }
+
+        start = after_max;
+    }
+    else
+    {
+        if(dst)
+            memcpy(dst, buf->data + start, toread);
+        start += toread;
+    }
+
+    if(!peeking)
+    {
+        buf->start = start;
+        buf->count -= toread;
+        buf->seq_start += toread;
+    }
+
+    pthread_cond_signal(&buf->cv_notfull);
+    pthread_mutex_unlock(&buf->lock);
+
+    return toread;
+}
 
 int circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, bool_t blocking)
 {
-    int toread;
-
-    if(len < (buf->end - buf->start))
-        toread = len;
-    else
-        toread = (buf->end - buf->start);
-
-    if(dst)
-        memcpy(dst, buf->data + buf->start, toread);
-    buf->start += toread;
-    buf->seq_start += toread;
-
-    return toread;
+    return __circular_buffer_read(buf, dst, len, blocking, FALSE);
 }
 
 int circular_buffer_peek(circular_buffer_t *buf, uint8_t *dst, uint32_t len, bool_t blocking)
 {
-    int toread;
-
-    if(len < (buf->end - buf->start))
-        toread = len;
-    else
-        toread = (buf->end - buf->start);
-
-    if(dst)
-        memcpy(dst, buf->data + buf->start, toread);
-
-    return toread;
+    return __circular_buffer_read(buf, dst, len, blocking, TRUE);
 }
 
 int circular_buffer_first(circular_buffer_t *buf)
@@ -124,12 +220,12 @@ int circular_buffer_capacity(circular_buffer_t *buf)
 
 int circular_buffer_count(circular_buffer_t *buf)
 {
-    return buf->end - buf->start;
+    return buf->count;
 }
 
 int circular_buffer_available(circular_buffer_t *buf)
 {
-    return buf->maxsize - (buf->end - buf->start);
+    return buf->maxsize - buf->count;
 }
 
 int circular_buffer_dump(circular_buffer_t *buf)
@@ -137,7 +233,7 @@ int circular_buffer_dump(circular_buffer_t *buf)
     printf("# # # # # # # # # # # # # # # # #\n");
 
     printf("maxsize: %i\n", buf->maxsize);
-    printf("count: %i\n", buf->end - buf->start);
+    printf("count: %i\n", buf->count);
 
     printf("start: %i\n", buf->start);
     printf("end: %i\n", buf->end);
@@ -158,11 +254,21 @@ int circular_buffer_dump(circular_buffer_t *buf)
 
 int circular_buffer_close(circular_buffer_t *buf)
 {
+    pthread_mutex_lock(&buf->lock);
+    buf->closed = TRUE;
+    pthread_cond_broadcast(&buf->cv_notempty);
+    pthread_mutex_unlock(&buf->lock);
+
     return CHITCP_OK;
 }
 
 int circular_buffer_free(circular_buffer_t *buf)
 {
+    free(buf->data);
+    pthread_mutex_destroy(&buf->lock);
+    pthread_cond_destroy(&buf->cv_notfull);
+    pthread_cond_destroy(&buf->cv_notempty);
+
     return CHITCP_OK;
 }
 
