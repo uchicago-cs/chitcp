@@ -18,7 +18,7 @@ enum chitcpd_debug_response print_state_updates(int sockfd, enum chitcpd_debug_e
 
     if (event_flag == DBG_EVT_TCP_STATE_CHANGE)
     {
-        printf("[SND.UNA = %5i  SND.NXT = %5i  RCV.NXT = %5i]",
+        printf("Socket %i: [SND.UNA = %5i  SND.NXT = %5i  RCV.NXT = %5i]", sockfd,
                 state_info->SND_UNA, state_info->SND_NXT, state_info->RCV_NXT);
 
 
