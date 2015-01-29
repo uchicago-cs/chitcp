@@ -11,7 +11,7 @@ noinst_LTLIBRARIES = libchitcpd.la libsimclist.la
 
 
 # Silence making even more by suppressing "Entering/Leaving" directory messages
-# Use "make V=1" to reenable 
+# Use "make V=1" to reenable
 PRINT_DIRECTORY_FLAGS_1=
 PRINT_DIRECTORY_FLAGS_0=--no-print-directory
 PRINT_DIRECTORY_FLAGS_=$(PRINT_DIRECTORY_FLAGS_$(AM_DEFAULT_VERBOSITY))
@@ -33,11 +33,11 @@ MOSTLYCLEANFILES = \
                     $(srcdir)/src/chitcpd-protobuf/*.lo \
                     $(srcdir)/src/chitcpd-protobuf/*.pb-c.*
 
-#    
+#
 # simclist
 #
 libsimclist_la_SOURCES = src/simclist/simclist.c
- 
+
 
 
 #
@@ -59,9 +59,9 @@ libchitcp_la_SOURCES = \
                         src/libchitcp/buffer.c
 libchitcp_la_CFLAGS = $(AM_CFLAGS) $(PROTOBUF_C_CFLAGS)
 libchitcp_la_LIBADD = $(PROTOBUF_C_LIBS) libsimclist.la
-libchitcp_la_DEPENDENCIES = libsimclist.la 
+libchitcp_la_DEPENDENCIES = libsimclist.la
 
-#    
+#
 # chitcpd
 #
 libchitcpd_la_SOURCES = \
@@ -75,7 +75,7 @@ libchitcpd_la_SOURCES = \
                          src/chitcpd/breakpoint.c
 
 bin_PROGRAMS = chitcpd
-chitcpd_SOURCES = src/chitcpd/main.c 
+chitcpd_SOURCES = src/chitcpd/main.c
 chitcpd_LDADD = libsimclist.la libchitcpd.la libchitcp.la
 chitcpd_DEPENDENCIES = libsimclist.la libchitcpd.la src/chitcpd-protobuf/chitcpd.pb-c.h
 
@@ -105,18 +105,18 @@ samples_simple_tester_LDADD = libchitcp.la
 # tests
 #
 CHITCP_BUILT_TESTS = tests/check_libchitcp tests/check_chitcpd tests/check_tcp
-TESTS = $(CHITCP_BUILT_TESTS) 
+TESTS = $(CHITCP_BUILT_TESTS)
 check_PROGRAMS = $(CHITCP_BUILT_TESTS)
 
 tests_check_libchitcp_SOURCES = \
                                  tests/check_libchitcp.c \
                                  tests/check_libchitcp_buffer.c
 tests_check_libchitcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
-tests_check_libchitcp_LDADD = libchitcp.la $(CHECK_LIBS) 
+tests_check_libchitcp_LDADD = libchitcp.la $(CHECK_LIBS)
 
 tests_check_chitcpd_SOURCES = \
                                tests/check_chitcpd.c
-tests_check_chitcpd_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd 
+tests_check_chitcpd_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
 tests_check_chitcpd_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
 tests_check_chitcpd_DEPENDENCIES = libchitcpd.la
 
@@ -124,8 +124,9 @@ tests_check_tcp_SOURCES = \
                                tests/check_tcp.c \
                                tests/check_tcp_conn_init.c \
                                tests/check_tcp_data_transfer.c \
+                               tests/check_tcp_conn_term.c \
+                               tests/check_tcp_unreliable_conn.c \
                                tests/fixtures.c
-tests_check_tcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd 
+tests_check_tcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
 tests_check_tcp_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
 tests_check_tcp_DEPENDENCIES = libchitcpd.la
-
