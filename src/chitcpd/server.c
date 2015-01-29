@@ -552,7 +552,11 @@ void* chitcpd_server_thread_func(void *args)
         shutdown(ht->handler_socket, SHUT_RDWR);
         pthread_mutex_unlock(&ht->handler_lock);
         pthread_join(ht->thread, NULL);
+        pthread_mutex_destroy(&ht->handler_lock);
+        free(ht);
     }
+
+    list_destroy(&handler_thread_list);
 
     pthread_exit(NULL);
 }
@@ -746,4 +750,3 @@ void* chitcpd_server_network_thread_func(void *args)
 
     pthread_exit(NULL);
 }
-

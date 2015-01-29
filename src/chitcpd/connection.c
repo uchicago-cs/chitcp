@@ -81,6 +81,7 @@ void* chitcpd_connection_thread_func(void *args)
     serverinfo_t *si = cta->si;
     tcpconnentry_t *connection = cta->connection;
     pthread_setname_np(pthread_self(), cta->thread_name);
+    free(args);
     struct sockaddr_storage local_addr, peer_addr;
     chitcphdr_t chitcp_header;
     uint8_t buf[1000];
@@ -543,7 +544,7 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
         /* Add to queue */
         pthread_mutex_lock(&socket_state->lock_pending_connections);
         list_append(&socket_state->pending_connections, pending_connection);
-        pthread_cond_signal(&socket_state->cv_pending_connections);
+        pthread_cond_broadcast(&socket_state->cv_pending_connections);
         pthread_mutex_unlock(&socket_state->lock_pending_connections);
     }
 
@@ -593,7 +594,7 @@ static void chitcpd_enqueue_packet(serverinfo_t *si, chisocketentry_t *entry, tc
         /* Notify the socket that there is a pending packet */
         pthread_mutex_lock(&entry->socket_state.active.lock_event);
         entry->socket_state.active.flags.net_recv = 1;
-        pthread_cond_signal(&entry->socket_state.active.cv_event);
+        pthread_cond_broadcast(&entry->socket_state.active.cv_event);
         pthread_mutex_unlock(&entry->socket_state.active.lock_event);
     }
 

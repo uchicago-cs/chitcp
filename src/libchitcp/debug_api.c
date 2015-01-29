@@ -216,9 +216,12 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler)
         return -1;
     }
 
+    pthread_detach(tid);
+
     return CHITCP_OK;
 }
 
+/* See chitcp/debug_api.h. */
 int chitcpd_debug_save_socket_state(debug_socket_state_t *state_info)
 {
     debug_socket_state_t *old_state_info =
@@ -390,7 +393,7 @@ static enum chitcpd_debug_response send_and_get_from_active(struct active_thread
 
     pthread_mutex_lock(&item->lock);
     item->event_flag = event_flag;
-    pthread_cond_signal(&item->cv);
+    pthread_cond_broadcast(&item->cv);
 
     /* Wait for the thread to respond */
     while (item->response == -1)

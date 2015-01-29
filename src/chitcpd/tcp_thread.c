@@ -254,6 +254,8 @@ void* chitcpd_tcp_thread_func(void *args)
      *
      * - cleanup: The thread must release its resources and exit
      *
+     * - timeout: A timeout has expired and the TCP thread must handle it.
+     *
      * Once an event is received, we clear the corresponding bit in the flags,
      * and release the lock on the flags. This means that, while the event is being
      * processed, the corresponding flag could be raised again (which means
@@ -332,6 +334,14 @@ void* chitcpd_tcp_thread_func(void *args)
             chitcpd_free_socket_entry(si, entry);
 
             done = TRUE;
+        }
+        else if(socket_state->flags.timeout)
+        {
+            chilog(TRACE, "Event received: timeout");
+            socket_state->flags.timeout = 0;
+            pthread_mutex_unlock(&socket_state->lock_event);
+
+            chitcpd_dispatch_tcp(si, entry, TIMEOUT);
         }
         chilog(TRACE, "TCP event has been handled");
     }

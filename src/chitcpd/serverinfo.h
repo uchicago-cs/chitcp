@@ -113,6 +113,7 @@ typedef struct active_chisocket_state
                     app_recv:1,     /* Application has read data from the buffer */
                     net_recv:1,     /* Data has arrived through the network */
                     app_close:1,    /* Application has requested the connection be closed */
+                    timeout:1,      /* A timeout has occured. */
                     cleanup:1;      /* Socket must release all its resources */
         };
         uint8_t raw;
@@ -288,6 +289,18 @@ typedef struct serverinfo
  *
  */
 void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_state_t newstate);
+
+/*
+ * chitcpd_timeout - Triggers a timeout of a socket.
+ *
+ * si: serverinfo struct
+ *
+ * entry: Socket entry
+ *
+ * Returns: Nothing
+ *
+ */
+void chitcpd_timeout(serverinfo_t *si, chisocketentry_t *entry);
 
 
 /*

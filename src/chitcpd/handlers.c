@@ -208,9 +208,11 @@ void* chitcpd_handler_dispatch(void *args)
 
     /* TODO: Be more discerning about what kind of shutdown this is */
     if(si->state == CHITCPD_STATE_STOPPING)
-        chilog(DEBUG, "chiTCP daemon is stopping. Freeing open sockets...");
+        chilog(DEBUG, "chiTCP daemon is stopping. Freeing open sockets for this handler...");
     else
-        chilog(DEBUG, "Daemon client has disconnected. Freeing open sockets...");
+        chilog(DEBUG, "Daemon client has disconnected. Freeing open sockets for this handler...");
+
+    int freed_sockets = 0;
 
     for(int i=0; i < si->chisocket_table_size; i++)
     {
@@ -228,11 +230,17 @@ void* chitcpd_handler_dispatch(void *args)
             else if(entry->actpas_type == SOCKET_PASSIVE)
                 chitcpd_free_socket_entry(si, entry);
 
+            freed_sockets++;
             /* TODO: Close the connection */
         }
     }
-    chilog(DEBUG, "Done freeing open sockets.");
+    if (freed_sockets)
+        chilog(DEBUG, "Done freeing open sockets.");
+    else
+        chilog(DEBUG, "This handler had no sockets to free.");
 
+    chilog(DEBUG, "Handler is exiting.");
+    free(args);
     return NULL;
 }
 
@@ -568,7 +576,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
         chilog(TRACE, "Signaling socket thread...");
         pthread_mutex_lock(&active_socket_state->lock_event);
         active_socket_state->flags.net_recv = 1;
-        pthread_cond_signal(&active_socket_state->cv_event);
+        pthread_cond_broadcast(&active_socket_state->cv_event);
         pthread_mutex_unlock(&active_socket_state->lock_event);
     }
 
@@ -714,7 +722,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     pthread_mutex_lock(&entry->lock_tcp_state);
     pthread_mutex_lock(&socket_state->lock_event);
     socket_state->flags.app_connect = 1;
-    pthread_cond_signal(&socket_state->cv_event);
+    pthread_cond_broadcast(&socket_state->cv_event);
     pthread_mutex_unlock(&socket_state->lock_event);
 
     /* Wait for socket to enter ESTABLISHED state */
@@ -827,7 +835,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__SEND)
     {
         pthread_mutex_lock(&socket_state->lock_event);
         socket_state->flags.app_send = 1;
-        pthread_cond_signal(&socket_state->cv_event);
+        pthread_cond_broadcast(&socket_state->cv_event);
         pthread_mutex_unlock(&socket_state->lock_event);
     }
 
@@ -943,7 +951,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__RECV)
     {
         pthread_mutex_lock(&socket_state->lock_event);
         socket_state->flags.app_recv = 1;
-        pthread_cond_signal(&socket_state->cv_event);
+        pthread_cond_broadcast(&socket_state->cv_event);
         pthread_mutex_unlock(&socket_state->lock_event);
     }
 
@@ -978,6 +986,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
     req = req_msg->close_args;
 
     sockfd = req->sockfd;
+
+    chilog(TRACE, ">>> CLOSE sockfd=%i", sockfd);
 
     if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
     {
@@ -1073,7 +1083,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
     pthread_mutex_lock(&entry->lock_tcp_state);
     pthread_mutex_lock(&socket_state->lock_event);
     socket_state->flags.app_close = 1;
-    pthread_cond_signal(&socket_state->cv_event);
+    pthread_cond_broadcast(&socket_state->cv_event);
     pthread_mutex_unlock(&socket_state->lock_event);
 
     /* Wait for socket to enter a valid closing state */
@@ -1093,7 +1103,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
         /* TODO: According to RFC 793, we actually shouldn't return from close()
          * until we're in FIN_WAIT_2 *and* the retransmission queue is empty.
          * However, a simultaneous close could land us in CLOSING or TIME_WAIT */
-        while(! (entry->tcp_state == FIN_WAIT_2 || entry->tcp_state == CLOSING || entry->tcp_state == TIME_WAIT ))
+        while(! (entry->tcp_state == FIN_WAIT_2 || entry->tcp_state == CLOSING ||
+                 entry->tcp_state == TIME_WAIT || entry->tcp_state == CLOSED ))
             pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
     }
     else if (entry->tcp_state == CLOSE_WAIT)

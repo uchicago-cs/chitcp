@@ -158,6 +158,10 @@ int chitcpd_tcp_state_handle_SYN_RCVD(serverinfo_t *si, chisocketentry_t *entry,
     {
         /* Your code goes here */
     }
+    else if (event == TIMEOUT)
+    {
+    /* Your code goes here */
+    }
     else
         chilog(WARNING, "In SYN_RCVD state, received unexpected event.");
 
@@ -169,6 +173,10 @@ int chitcpd_tcp_state_handle_SYN_SENT(serverinfo_t *si, chisocketentry_t *entry,
     if (event == PACKET_ARRIVAL)
     {
         /* Your code goes here */
+    }
+    else if (event == TIMEOUT)
+    {
+    /* Your code goes here */
     }
     else
         chilog(WARNING, "In SYN_SENT state, received unexpected event.");
@@ -194,18 +202,25 @@ int chitcpd_tcp_state_handle_ESTABLISHED(serverinfo_t *si, chisocketentry_t *ent
     {
         /* Your code goes here */
     }
+    else if (event == TIMEOUT)
+    {
+      /* Your code goes here */
+    }
     else
         chilog(WARNING, "In ESTABLISHED state, received unexpected event (%i).", event);
 
     return CHITCP_OK;
 }
 
-
 int chitcpd_tcp_state_handle_FIN_WAIT_1(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
     if (event == PACKET_ARRIVAL)
     {
         /* Your code goes here */
+    }
+    else if (event == TIMEOUT)
+    {
+      /* Your code goes here */
     }
     else
        chilog(WARNING, "In FIN_WAIT_1 state, received unexpected event (%i).", event);
@@ -219,6 +234,10 @@ int chitcpd_tcp_state_handle_FIN_WAIT_2(serverinfo_t *si, chisocketentry_t *entr
     if (event == PACKET_ARRIVAL)
     {
         /* Your code goes here */
+    }
+    else if (event == TIMEOUT)
+    {
+      /* Your code goes here */
     }
     else
         chilog(WARNING, "In FIN_WAIT_2 state, received unexpected event (%i).", event);
@@ -237,6 +256,10 @@ int chitcpd_tcp_state_handle_CLOSE_WAIT(serverinfo_t *si, chisocketentry_t *entr
     {
         /* Your code goes here */
     }
+    else if (event == TIMEOUT)
+    {
+      /* Your code goes here */
+    }
     else
        chilog(WARNING, "In CLOSE_WAIT state, received unexpected event (%i).", event);
 
@@ -250,6 +273,10 @@ int chitcpd_tcp_state_handle_CLOSING(serverinfo_t *si, chisocketentry_t *entry, 
     if (event == PACKET_ARRIVAL)
     {
         /* Your code goes here */
+    }
+    else if (event == TIMEOUT)
+    {
+      /* Your code goes here */
     }
     else
        chilog(WARNING, "In CLOSING state, received unexpected event (%i).", event);
@@ -281,4 +308,3 @@ int chitcpd_tcp_state_handle_LAST_ACK(serverinfo_t *si, chisocketentry_t *entry,
 /*                                                           */
 /*     Any additional functions you need should go here      */
 /*                                                           */
-

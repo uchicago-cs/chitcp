@@ -346,6 +346,8 @@ ssize_t chisocket_send(int sockfd, const void *buf, size_t buf_len, int flags)
     ret = (error_code? -1 : ret);
     if(error_code) errno = error_code;
 
+    free(newbuf);
+
     return ret;
 }
 
@@ -393,4 +395,3 @@ ssize_t chisocket_recv(int sockfd, void *buf, size_t len, int flags)
 
     return ret;
 }
-

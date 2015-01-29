@@ -87,7 +87,7 @@ void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_sta
 {
     pthread_mutex_lock(&entry->lock_tcp_state);
     entry->tcp_state = newstate;
-    pthread_cond_signal(&entry->cv_tcp_state);
+    pthread_cond_broadcast(&entry->cv_tcp_state);
 
     chitcpd_debug_breakpoint(si, ptr_to_fd(si, entry), DBG_EVT_TCP_STATE_CHANGE, -1);
 
@@ -99,9 +99,19 @@ void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_sta
 
         pthread_mutex_lock(&socket_state->lock_event);
         socket_state->flags.cleanup = 1;
-        pthread_cond_signal(&socket_state->cv_event);
+        pthread_cond_broadcast(&socket_state->cv_event);
         pthread_mutex_unlock(&socket_state->lock_event);
     }
+}
+
+/* See serverinfo.h */
+void chitcpd_timeout(serverinfo_t *si, chisocketentry_t *entry)
+{
+    active_chisocket_state_t *socket_state = &entry->socket_state.active;
+    pthread_mutex_lock(&socket_state->lock_event);
+    socket_state->flags.timeout = 1;
+    pthread_cond_broadcast(&socket_state->cv_event);
+    pthread_mutex_unlock(&socket_state->lock_event);
 }
 
 /* See serverinfo.h */
@@ -157,6 +167,8 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
 
     if(entry->actpas_type == SOCKET_PASSIVE)
     {
+        chilog(TRACE, "Freeing entry for passive socket %i", SOCKET_NO(si, entry));
+
         passive_chisocket_state_t *socket_state = &entry->socket_state.passive;
         list_destroy(&socket_state->pending_connections);
         pthread_mutex_destroy(&socket_state->lock_pending_connections);
@@ -192,6 +204,8 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
     memset(entry, 0, sizeof(chisocketentry_t));
 
     entry->available = TRUE;
+
+    chilog(TRACE, "Finished freeing entry for socket %i", SOCKET_NO(si, entry));
 
     return CHITCP_OK;
 }

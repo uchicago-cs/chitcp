@@ -193,7 +193,7 @@ void* chitcp_tester_peer_thread_func(void *args)
         }
 
         peer->event = TEST_EVENT_NONE;
-        pthread_cond_signal(&peer->cv_event);
+        pthread_cond_broadcast(&peer->cv_event);
         pthread_mutex_unlock(&peer->lock_event);
     }
 
@@ -205,7 +205,7 @@ int chitcp_tester_peer_update_state(chitcp_tester_peer_t* peer, peer_state_t sta
     RET_ON_ERROR(pthread_mutex_lock(&peer->lock_state),
             CHITCP_ESYNC);
     peer->state = state;
-    RET_ON_ERROR(pthread_cond_signal(&peer->cv_state),
+    RET_ON_ERROR(pthread_cond_broadcast(&peer->cv_state),
                 CHITCP_ESYNC);
     RET_ON_ERROR(pthread_mutex_unlock(&peer->lock_state),
             CHITCP_ESYNC);
@@ -241,7 +241,7 @@ int chitcp_tester_peer_event(chitcp_tester_peer_t* peer, test_event_t event)
 
     peer->event = event;
 
-    RET_ON_ERROR(pthread_cond_signal(&peer->cv_event),
+    RET_ON_ERROR(pthread_cond_broadcast(&peer->cv_event),
             CHITCP_ESYNC);
     RET_ON_ERROR(pthread_mutex_unlock(&peer->lock_event),
             CHITCP_ESYNC);
