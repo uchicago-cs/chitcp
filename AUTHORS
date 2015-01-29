@@ -8,3 +8,7 @@ Nathan Hatch
 
 Calvin Deutschbein
     Initial implementation of TCP protocol
+
+Tristan Rasmussen
+    TCP over unreliable networks
+    Wireshark dissector
