@@ -164,14 +164,11 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
     }
     else if(entry->actpas_type == SOCKET_ACTIVE)
     {
-        active_chisocket_state_t *socket_state = &entry->socket_state.active;
-        tcp_data_t *tcp_data = &socket_state->tcp_data;
+        chilog(TRACE, "Freeing entry for active socket %i", SOCKET_NO(si, entry));
 
-        circular_buffer_free(&tcp_data->send);
-        circular_buffer_free(&tcp_data->recv);
-        list_destroy(&tcp_data->pending_packets);
-        pthread_mutex_destroy(&tcp_data->lock_pending_packets);
-        pthread_cond_destroy(&tcp_data->cv_pending_packets);
+        active_chisocket_state_t *socket_state = &entry->socket_state.active;
+
+        tcp_data_free(&socket_state->tcp_data);
 
         pthread_mutex_unlock(&socket_state->lock_event);
         pthread_mutex_destroy(&socket_state->lock_event);

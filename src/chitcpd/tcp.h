@@ -140,4 +140,7 @@ typedef struct tcp_data
     bool_t closing;
 } tcp_data_t;
 
+void tcp_data_init(tcp_data_t *tcp_data);
+void tcp_data_free(tcp_data_t *tcp_data);
+
 #endif /* TCP_H_ */

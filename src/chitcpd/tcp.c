@@ -97,6 +97,33 @@
 #include <string.h>
 
 
+
+void tcp_data_init(tcp_data_t *tcp_data)
+{
+    list_init(&tcp_data->pending_packets);
+    pthread_mutex_init(&tcp_data->lock_pending_packets, NULL);
+    pthread_cond_init(&tcp_data->cv_pending_packets, NULL);
+    list_init(&tcp_data->withheld_packets);
+    pthread_mutex_init(&tcp_data->lock_withheld_packets, NULL);
+
+    /* Initialization of additional tcp_data_t fields goes here */
+}
+
+void tcp_data_free(tcp_data_t *tcp_data)
+{
+    circular_buffer_free(&tcp_data->send);
+    circular_buffer_free(&tcp_data->recv);
+    list_destroy(&tcp_data->pending_packets);
+    pthread_mutex_destroy(&tcp_data->lock_pending_packets);
+    pthread_cond_destroy(&tcp_data->cv_pending_packets);
+
+    list_destroy(&tcp_data->withheld_packets);
+    pthread_mutex_destroy(&(tcp_data->lock_withheld_packets));
+
+    /* Cleanup of additional tcp_data_t fields goes here */
+}
+
+
 int chitcpd_tcp_state_handle_CLOSED(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
     if (event == APPLICATION_CONNECT)

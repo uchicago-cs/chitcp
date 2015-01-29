@@ -511,11 +511,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     active_entry->actpas_type = SOCKET_ACTIVE;
     active_socket_state->parent_socket = entry;
 
-    list_init(&active_socket_state->tcp_data.pending_packets);
-    pthread_mutex_init(&active_socket_state->tcp_data.lock_pending_packets, NULL);
-    pthread_cond_init(&active_socket_state->tcp_data.cv_pending_packets, NULL);
-    list_init(&active_socket_state->tcp_data.withheld_packets);
-    pthread_mutex_init(&active_socket_state->tcp_data.lock_withheld_packets, NULL);
+    tcp_data_init(&active_socket_state->tcp_data);
 
     active_socket_state->flags.raw = 0;
     pthread_mutex_init(&active_socket_state->lock_event, NULL);
@@ -682,9 +678,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     entry->actpas_type = SOCKET_ACTIVE;
     socket_state = &entry->socket_state.active;
 
-    list_init(&socket_state->tcp_data.pending_packets);
-    pthread_mutex_init(&socket_state->tcp_data.lock_pending_packets, NULL);
-    pthread_cond_init(&socket_state->tcp_data.cv_pending_packets, NULL);
+    tcp_data_init(&socket_state->tcp_data);
 
     socket_state->flags.raw = 0;
     pthread_mutex_init(&socket_state->lock_event, NULL);
