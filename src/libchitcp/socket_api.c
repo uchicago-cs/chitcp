@@ -94,7 +94,7 @@ int chisocket_socket(int domain, int type, int protocol)
     return ret;
 }
 
-int chisocket_connect(int sockfd, struct sockaddr *addr, socklen_t addrlen)
+int chisocket_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     ChitcpdMsg req = CHITCPD_MSG__INIT;
     ChitcpdConnectArgs ca = CHITCPD_CONNECT_ARGS__INIT;
@@ -102,6 +102,8 @@ int chisocket_connect(int sockfd, struct sockaddr *addr, socklen_t addrlen)
     int ret, error_code;
     int daemon_socket;
     int rc;
+    uint8_t addr_copy [addrlen]; /* for const-correctness */
+    memcpy(addr_copy, addr, addrlen);
 
     daemon_socket = chitcpd_get_socket();
     if (daemon_socket < 0)
@@ -112,11 +114,7 @@ int chisocket_connect(int sockfd, struct sockaddr *addr, socklen_t addrlen)
     req.connect_args = &ca;
 
     ca.sockfd = sockfd;
-    /* It is perhaps better programming practice to copy the address to a new
-     * buffer, but this might require malloc'ing it, which I don't think is
-     * worth it. We might also allocate space for a struct sockaddr_storage on
-     * the stack? Would that be a better idea? TODO */
-    ca.addr.data = (uint8_t *) addr;
+    ca.addr.data = addr_copy;
     ca.addr.len = addrlen;
 
     rc = chitcpd_send_command(daemon_socket, &req, &resp_p);
@@ -137,7 +135,7 @@ int chisocket_connect(int sockfd, struct sockaddr *addr, socklen_t addrlen)
     return ret;
 }
 
-int chisocket_bind(int sockfd, struct sockaddr *addr, socklen_t addrlen)
+int chisocket_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     ChitcpdMsg req = CHITCPD_MSG__INIT;
     ChitcpdBindArgs ba = CHITCPD_BIND_ARGS__INIT;
@@ -145,6 +143,8 @@ int chisocket_bind(int sockfd, struct sockaddr *addr, socklen_t addrlen)
     int ret, error_code;
     int daemon_socket;
     int rc;
+    uint8_t addr_copy [addrlen]; /* for const correctness */
+    memcpy(addr_copy, addr, addrlen);
 
     daemon_socket = chitcpd_get_socket();
     if (daemon_socket < 0)
@@ -155,7 +155,7 @@ int chisocket_bind(int sockfd, struct sockaddr *addr, socklen_t addrlen)
     req.bind_args = &ba;
 
     ba.sockfd = sockfd;
-    ba.addr.data = (uint8_t *) addr;
+    ba.addr.data = addr_copy;
     ba.addr.len = addrlen;
 
     rc = chitcpd_send_command(daemon_socket, &req, &resp_p);
@@ -311,8 +311,7 @@ ssize_t chisocket_send(int sockfd, const void *buf, size_t buf_len, int flags)
 
     /* Copy the buf for const-correctness
      * (Irritatingly, there seems to be no way to tell the compiler that we
-     * won't harm any sub-structures pointed to by the ChitcpdMsg.)
-     * TODO:  find a clean way to do this */
+     * won't harm any sub-structures pointed to by the ChitcpdMsg.) */
     newbuf = malloc(buf_len);
     if (!newbuf)
     {

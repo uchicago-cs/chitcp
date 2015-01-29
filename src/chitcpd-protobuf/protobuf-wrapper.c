@@ -48,9 +48,6 @@
 #include "protobuf-wrapper.h"
 
 
-/* TODO: should we establish a maximum daemon message size, to avoid constant
- * malloc()ing and free()ing?
- */
 int chitcpd_send_msg(int sockfd, const ChitcpdMsg *msg)
 {
     int nbytes;
@@ -59,9 +56,11 @@ int chitcpd_send_msg(int sockfd, const ChitcpdMsg *msg)
 
     size = chitcpd_msg__get_packed_size(msg);
     packed = malloc(sizeof(size_t) + size); /* message length, then message */
+    /* We use malloc rather than stack space because message length
+     * can be arbitrarily long.*/
     if (!packed)
     {
-        perror("malloc failed");
+        perror("chitcpd_send_msg: malloc failed");
         return -2;
     }
     *((size_t *) packed) = size; /* copy over the length (host byte order) */
@@ -78,7 +77,7 @@ int chitcpd_send_msg(int sockfd, const ChitcpdMsg *msg)
     }
     else if (nbytes == -1)
     {
-        perror("Unexpected error in send()");
+        perror("chitcpd_send_msg: Unexpected error in send()");
         return -2;
     }
 
@@ -102,14 +101,14 @@ int chitcpd_recv_msg(int sockfd, ChitcpdMsg **msg_p)
     }
     else if (nbytes == -1)
     {
-        perror("Unexpected error in recv()");
+        perror("chitcpd_recv_msg: Unexpected error in recv()");
         return -2;
     }
 
     packed = malloc(size);
     if (!packed)
     {
-        perror("malloc failed");
+        perror("chitcpd_recv_msg: malloc failed");
         return -2;
     }
 
@@ -125,7 +124,7 @@ int chitcpd_recv_msg(int sockfd, ChitcpdMsg **msg_p)
     }
     else if (nbytes == -1)
     {
-        perror("Unexpected error in recv()");
+        perror("chitcpd_recv_msg: Unexpected error in recv()");
         free(packed);
         return -2;
     }
@@ -135,13 +134,16 @@ int chitcpd_recv_msg(int sockfd, ChitcpdMsg **msg_p)
     if (!*msg_p)
     {
         errno = EPROTO;
-        perror("error unpacking chitcpd msg");
+        perror("chitcpd_recv_msg: Error unpacking chitcpd msg");
         return -2;
     }
 
     return CHITCP_OK;
 }
 
+/* Note: if two threads call this function on the same socket, each thread
+ * may get the response intended for the other. Therefore be careful not
+ * to do that. */
 int chitcpd_send_and_recv_msg(int sockfd, const ChitcpdMsg *req, ChitcpdMsg **resp)
 {
     int r;

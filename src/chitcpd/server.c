@@ -383,7 +383,6 @@ void* chitcpd_server_thread_func(void *args)
     resp_outer.resp = &resp_inner;
 
     /* For naming the handler threads we create (for debugging/logging) */
-    char next_thread_name[16];
     int next_thread_id = 0;
     pthread_setname_np(pthread_self(), "unix_server");
 
@@ -529,10 +528,6 @@ void* chitcpd_server_thread_func(void *args)
             shutdown(client_socket, SHUT_RDWR);
         }
 
-        /* TODO: have this happen before the handler thread starts (to avoid
-         * race conditions). */
-        snprintf(next_thread_name, 16, "handler-%d", next_thread_id++);
-        pthread_setname_np(handler_thread->thread, next_thread_name);
         chitcpd_msg__free_unpacked(req, NULL);
     }
 

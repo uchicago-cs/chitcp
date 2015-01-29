@@ -229,11 +229,10 @@ int chitcpd_debug_save_socket_state(debug_socket_state_t *state_info)
         free(old_state_info->send);
         free(old_state_info);
     }
-    pthread_setspecific(state_key, state_info);
 
-    return 0; /* TODO: return something meaningful */
+    return pthread_setspecific(state_key, state_info);
 }
-    
+
 /* Matches elements from the list of active threads by their sockfd */
 static int active_list_seeker(const void *el, const void *id)
 {
@@ -302,20 +301,37 @@ static void *debug_thread(void *_args)
             {
                 struct active_thread_args *new_args =
                     malloc(sizeof(struct active_thread_args));
-                /* TODO: error check */
+                if (new_args == NULL)
+                {
+                    fprintf(stderr, "debug_thread: Fatal error: no memory available to create new active_thread\n");
+                    break;
+                }
+
                 pthread_cond_init(&new_args->cv, NULL);
                 pthread_mutex_init(&new_args->lock, NULL);
                 new_args->sockfd = passive ? new_sockfd : sockfd;
                 new_args->handler = handler;
-                new_args->event_flag = 0; /* not an actual event flag */
-                new_args->response = -1; /* not an actual response */
-                list_append(&active_list, new_args);
+
+                /* The following two values are chosen because they do not
+                 * represent an actual event or response. This is important
+                 * for communication between this thread and the child. */
+                new_args->event_flag = 0;
+                new_args->response = -1;
 
                 rc = pthread_create(&new_args->tid, NULL, active_thread, (void *) new_args);
-                /* TODO: error check */
+                if (rc < 0)
+                {
+                    fprintf(stderr, "debug_thread: Fatal error: insufficient resources to create new active_thread\n");
+                    pthread_mutex_destroy(&new_args->lock);
+                    pthread_cond_destroy(&new_args->cv);
+                    free(new_args);
+                    break;
+                }
+
+                list_append(&active_list, new_args);
             }
         }
-        
+
         if (event_flag != DBG_EVT_PENDING_CONNECTION)
         {
             /* We must pass this event on to the associated active_thread. */
@@ -434,22 +450,19 @@ static void *active_thread(void *_args)
 
         if (args->response == DBG_RESP_STOP)
             done = TRUE;
-        pthread_cond_signal(&args->cv);
+        pthread_cond_broadcast(&args->cv);
         pthread_mutex_unlock(&args->lock);
 
         if (done)
         {
             /* Free the saved state. */
             chitcpd_debug_save_socket_state(NULL);
-            
+
             pthread_exit(NULL);
         }
     }
 }
 
-/* TODO: this might not be thread-safe since chitcpd_send_command isn't
- * thread-safe. This is especially a problem because this will presumably
- * be called frequently from debug event handler threads. */
 debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffers)
 {
     ChitcpdMsg req = CHITCPD_MSG__INIT;
@@ -488,7 +501,7 @@ debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffer
     if (resp_p->resp->ret != CHITCP_OK)
     {
         errno = resp_p->resp->error_code;
-        perror("Could not get socket state from daemon");
+        perror("chitcpd_get_socket_state: Could not get socket state from daemon");
         free(ret);
         return NULL;
     }
@@ -514,12 +527,12 @@ debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffer
         req.code = CHITCPD_MSG_CODE__GET_SOCKET_BUFFER_CONTENTS;
         req.get_socket_state_args = NULL;
         req.get_socket_buffer_contents_args = &gsbca;
- 
+
         rc = chitcpd_send_command(daemon_socket, &req, &resp_p);
 
         if (rc != CHITCP_OK)
         {
-            perror("Error when sending command to chiTCP daemon");
+            perror("chitcpd_get_socket_state: Error when sending command to chiTCP daemon");
             free(ret);
             return NULL;
         }
@@ -529,7 +542,7 @@ debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffer
         if (resp_p->resp->ret != CHITCP_OK)
         {
             errno = resp_p->resp->error_code;
-            perror("Could not get socket buffers from daemon");
+            perror("chitcpd_get_socket_state: Could not get socket buffers from daemon");
             free(ret);
             return NULL;
         }

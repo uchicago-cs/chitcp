@@ -47,6 +47,7 @@ typedef struct handler_thread_args
     serverinfo_t *si;
     socket_t client_socket;
     pthread_mutex_t *handler_lock;
+    char thread_name [16];
 } handler_thread_args_t;
 
 void* chitcpd_handler_dispatch(void *args);

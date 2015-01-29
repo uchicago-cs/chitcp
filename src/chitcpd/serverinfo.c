@@ -178,6 +178,12 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
     pthread_mutex_destroy(&entry->lock_tcp_state);
     pthread_cond_destroy(&entry->cv_tcp_state);
 
+    if (entry->debug_monitor != NULL)
+    {
+        chitcpd_debug_detach_monitor(entry);
+    }
+    pthread_mutex_destroy(&entry->lock_debug_monitor);
+
     /* Mark local port as available */
     addr = (struct sockaddr*) &entry->local_addr;
     if ((port = chitcp_ntohs(chitcp_get_addr_port(addr))) >= 0)

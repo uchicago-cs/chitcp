@@ -135,6 +135,7 @@ void* chitcpd_handler_dispatch(void *args)
     serverinfo_t *si = ha->si;
     socket_t client_socket = ha->client_socket;
     pthread_mutex_t *handler_lock = ha->handler_lock;
+    pthread_setname_np(pthread_self(), ha->thread_name);
     ChitcpdMsg *req;
     ChitcpdMsg resp_outer = CHITCPD_MSG__INIT;
     ChitcpdResp resp_inner = CHITCPD_RESP__INIT;
@@ -525,22 +526,9 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     enum chitcpd_debug_response r =
         chitcpd_debug_breakpoint(si, sockfd, DBG_EVT_PENDING_CONNECTION, socket_index);
 
-    if (r != DBG_RESP_NONE && r != DBG_RESP_STOP)
-    {
-        /* TODO: there is a race condition if the debug monitor
-         * changes between calling chitcpd_debug_breakpoint and
-         * executing the following code. In order to fix it, we will
-         * need to change the interface for chitcpd_debug_breakpoint.
-         */
-        pthread_mutex_lock(&entry->lock_debug_monitor);
-        pthread_mutex_lock(&active_entry->lock_debug_monitor);
-        active_entry->debug_monitor = entry->debug_monitor;
-        active_entry->event_flags = entry->event_flags;
-        pthread_mutex_unlock(&entry->lock_debug_monitor);
-        pthread_mutex_unlock(&active_entry->lock_debug_monitor);
-        chilog(DEBUG, "Added debug monitor for new active socket %d",
-               socket_index);
-    }
+    /* Linking of the debug monitor to the new socket
+     * (if r == DBG_RESP_ACCEPT_MONITOR) is actually performed _within_
+     * chitcpd_debug_breakpoint, in order to avoid a race condition. */
 
     /* Strictly speaking, the socket should transition to SYN_RCVD
      * because we've received a SYN packet. However, this transition
@@ -599,8 +587,22 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     /* Create chitcpd response address information */
     resp->has_addr = TRUE;
     resp->addr.data = (uint8_t *) &active_entry->remote_addr;
-    /* TODO: is this the correct length to report? */
-    resp->addr.len = sizeof(struct sockaddr_storage);
+
+    /* Finding the length of this address turns out to be complicated. */
+#ifdef SIN6_LEN
+    if(active_entry->remote_addr.ss_len != 0)
+        resp->addr.len = active_entry->remote_addr.ss_len;
+#else
+    switch(active_entry->remote_addr.ss_family)
+    {
+    case AF_INET:
+        resp->addr.len = sizeof(struct sockaddr_in);
+    case AF_INET6:
+        resp->addr.len = sizeof(struct sockaddr_in6);
+    default:
+        resp->addr.len = sizeof(struct sockaddr_storage);
+    }
+#endif
 
 done:
     /* Create response return code */
@@ -740,7 +742,7 @@ done:
 HANDLER_FUNCTION(CHITCPD_MSG_CODE__SEND)
 {
     chisocket_t sockfd;
-    uint8_t data[MAX_CHITCPD_PAYLOAD_SIZE];
+    uint8_t *data;
     size_t length;
     int ret, error_code = 0;;
     ChitcpdSendArgs *req;
@@ -752,14 +754,12 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__SEND)
     req = req_msg->send_args;
 
     sockfd = req->sockfd;
-    /* TODO: ensure this is less than MAX_CHITCPD_PAYLOAD_SIZE
-     * or find a way to eliminate the need for this constant */
     length = req->buf.len;
+    data = req->buf.data;
 
     /* TODO: handle the different flags */
     /* int flags = req->flags; */
 
-    memcpy(data, req->buf.data, length);
     if(length <= 0)
     {
         chilog(ERROR, "Invalid length: %i", length);

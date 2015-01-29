@@ -176,6 +176,7 @@ typedef struct tcp_thread_args
 {
     serverinfo_t *si;
     chisocketentry_t *entry;
+    char thread_name[16];
 } tcp_thread_args_t;
 
 
@@ -194,6 +195,7 @@ int chitcpd_tcp_start_thread(serverinfo_t *si, chisocketentry_t *entry)
     tcp_thread_args_t *tta = malloc(sizeof(tcp_thread_args_t));
     tta->si = si;
     tta->entry = entry;
+    snprintf (tta->thread_name, 16, "tcp--fd-%d", ptr_to_fd(si, entry));
 
     if (pthread_create(&entry->socket_state.active.tcp_thread, NULL, chitcpd_tcp_thread_func, tta) < 0)
     {
@@ -201,12 +203,6 @@ int chitcpd_tcp_start_thread(serverinfo_t *si, chisocketentry_t *entry)
         free(tta);
         return CHITCP_ETHREAD;
     }
-
-    /* Set new thread's name (for debugging/logging). */
-    /* TODO: have this happen before the tcp thread starts (to avoid races). */
-    char thread_name[16];
-    snprintf (thread_name, 16, "tcp--fd-%d", ptr_to_fd(si, entry));
-    pthread_setname_np (entry->socket_state.active.tcp_thread, thread_name);
 
     return CHITCP_OK;
 }
@@ -225,6 +221,7 @@ void* chitcpd_tcp_thread_func(void *args)
     tcp_thread_args_t *tta = (tcp_thread_args_t *) args;
     serverinfo_t *si = tta->si;
     chisocketentry_t *entry = tta->entry;
+    pthread_setname_np(pthread_self(), tta->thread_name);
     active_chisocket_state_t *socket_state = &entry->socket_state.active;
     tcp_data_t *tcp_data = &socket_state->tcp_data;
     int done = FALSE;

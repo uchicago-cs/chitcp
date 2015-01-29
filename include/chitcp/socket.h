@@ -57,9 +57,9 @@
 #include <errno.h>
 
 extern int chisocket_socket(int domain, int type, int protocol);
-extern int chisocket_bind(int sockfd, struct sockaddr *addr, socklen_t addrlen);
+extern int chisocket_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 extern int chisocket_listen(int sockfd, int backlog);
-extern int chisocket_connect(int sockfd, struct sockaddr* addr, socklen_t addrlen);
+extern int chisocket_connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen);
 extern int chisocket_accept(int sockfd, struct sockaddr* addr, socklen_t *addrlen);
 extern int chisocket_close(int sockfd);
 extern ssize_t chisocket_recv(int sockfd, void *buffer, size_t length, int flags);

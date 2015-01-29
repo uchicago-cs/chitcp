@@ -150,6 +150,7 @@ typedef struct debug_monitor
     int numwaiters; /* Number of threads blocked on lock_sockfd */
     bool_t dying;   /* Has the peer closed the sockfd connection? */
     int sockfd;     /* The UNIX socket to which to write debug messages */
+    int ref_count;  /* The number of chisockets registered to this monitor */
 } debug_monitor_t;
 
 /* Entry in socket table */

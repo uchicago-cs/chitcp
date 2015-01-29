@@ -136,7 +136,8 @@ typedef struct debug_socket_state
 /* Print the socket information to stdout. (Useful for debugging.) */
 void dump_socket_state(struct debug_socket_state *state, bool_t include_buffers);
 
-/* Saves socket state STATE for use with debug_event_handlers (see below). */
+/* Saves socket state STATE for use with debug_event_handlers (see below).
+ * Returns: ENOMEM on insufficient memory, 0 otherwise */
 int chitcpd_debug_save_socket_state(struct debug_socket_state *state);
 
 /*

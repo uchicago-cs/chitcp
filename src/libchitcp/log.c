@@ -90,6 +90,9 @@ void chilog(loglevel_t level, char *fmt, ...)
     case TRACE:
         levelstr = "TRACE";
         break;
+    default:
+        levelstr = "UNKNOWN";
+        break;
     }
 
     /* Get the thread's name. */

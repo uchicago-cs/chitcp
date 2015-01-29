@@ -80,6 +80,7 @@ void* chitcpd_connection_thread_func(void *args)
     bool_t done = FALSE;
     serverinfo_t *si = cta->si;
     tcpconnentry_t *connection = cta->connection;
+    pthread_setname_np(pthread_self(), cta->thread_name);
     struct sockaddr_storage local_addr, peer_addr;
     chitcphdr_t chitcp_header;
     uint8_t buf[1000];
@@ -319,12 +320,12 @@ int chitcpd_create_connection_thread(serverinfo_t *si, tcpconnentry_t* connectio
     pthread_t connection_thread;
 
     /* For naming the connection threads we create (for debugging/logging) */
-    char next_thread_name[16];
     static int next_thread_id = 0;
 
     cta = malloc(sizeof(connection_thread_args_t));
     cta->si = si;
     cta->connection = connection;
+    snprintf(cta->thread_name, 16, "connect-%d", next_thread_id++);
 
     if (pthread_create(&connection_thread, NULL, chitcpd_connection_thread_func, cta) != 0)
     {
@@ -333,11 +334,6 @@ int chitcpd_create_connection_thread(serverinfo_t *si, tcpconnentry_t* connectio
     }
 
     connection->thread = connection_thread;
-
-    /* TODO: have this happen before the handler thread starts (to avoid
-     * race conditions). */
-    snprintf(next_thread_name, 16, "connect-%d", next_thread_id++);
-    pthread_setname_np(connection_thread, next_thread_name);
 
     return CHITCP_OK;
 }
@@ -409,7 +405,7 @@ tcpconnentry_t* chitcpd_add_connection(serverinfo_t *si, socket_t realsocket_sen
 int chitcpd_send_tcp_packet(serverinfo_t *si, chisocketentry_t *sock, tcp_packet_t* tcp_packet)
 {
     enum chitcpd_debug_response r = chitcpd_debug_breakpoint(si, ptr_to_fd(si, sock), DBG_EVT_OUTGOING_PACKET, -1);
-    
+
     if (r == DBG_RESP_DROP)
     {
         chilog(TRACE, "chitcpd_send_tcp_packet: dropping the packet");
@@ -607,4 +603,3 @@ static void chitcpd_enqueue_packet(serverinfo_t *si, chisocketentry_t *entry, tc
         chilog(TRACE, "chitcpd_enqueue_packet: dropping the packet");
     }
 }
-

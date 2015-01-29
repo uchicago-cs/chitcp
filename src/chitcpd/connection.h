@@ -48,6 +48,7 @@ typedef struct connection_thread_args
 {
     serverinfo_t *si;
     tcpconnentry_t *connection;
+    char thread_name[16];
 } connection_thread_args_t;
 
 void* chitcpd_connection_thread_func(void *args);
