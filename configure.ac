@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.68])
-AC_INIT([chitcp], [1.0], [do-not-email@example.org])
+AC_INIT([chitcp], [1.1], [do-not-email@example.org])
 AC_CONFIG_SRCDIR([src/chitcpd/main.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -41,18 +41,18 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([bzero gethostbyname gettimeofday memset socket strdup])
-PKG_CHECK_MODULES(CHECK, [check >= 0.9.8],,[AC_MSG_RESULT([no, testing is disabled])]) 
-
-PKG_CHECK_MODULES([PROTOBUF_C], [libprotobuf-c >= 0.15],,[AC_MSG_ERROR([
-  ERROR: libprotobuf-c >= 0.15 is required
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.14],,[AC_MSG_RESULT([no, testing is disabled])]) 
+PKG_CHECK_MODULES([protobuf], [protobuf >= 2.6.1])
+PKG_CHECK_MODULES([PROTOBUF_C], [libprotobuf-c >= 1.0.2],,[AC_MSG_ERROR([
+  ERROR: libprotobuf-c >= 1.0.2 is required
 
   If libprotobuf-c is not available as an installable package
   on your system, you can download it at:
   
-  http://code.google.com/p/protobuf-c/
+  https://github.com/protobuf-c/protobuf-c
   
   Note that you also need to install Google's protobuf library
-  (http://code.google.com/p/protobuf/) before installing 
+  (https://github.com/google/protobuf) before installing 
   libprotobuf-c.
   ])])
 AC_CHECK_PROG([PROTOC_C], [protoc-c], [protoc-c])
