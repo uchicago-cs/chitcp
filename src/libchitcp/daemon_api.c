@@ -64,6 +64,11 @@ int chitcpd_get_socket()
 {
     void *daemon_socket_ptr;
     int daemon_socket;
+    int rc;
+    ChitcpdMsg msg = CHITCPD_MSG__INIT;
+    ChitcpdInitArgs ia = CHITCPD_INIT_ARGS__INIT;
+    ChitcpdMsg *resp_p;
+
     pthread_once(&daemon_socket_key_init, create_daemon_socket_key);
 
     daemon_socket_ptr = pthread_getspecific(daemon_socket_key);
@@ -81,6 +86,24 @@ int chitcpd_get_socket()
          * Return the error code immediately. */
         if(daemon_socket < 0)
             return daemon_socket;
+
+        /* Send INIT message */
+        msg.code = CHITCPD_MSG_CODE__INIT;
+        msg.init_args = &ia;
+        msg.init_args->connection_type = CHITCPD_CONNECTION_TYPE__COMMAND_CONNECTION;
+
+        rc = chitcpd_send_command(daemon_socket, &msg, &resp_p);
+        if (rc < 0)
+            return rc;
+
+        /* Unpack response */
+        assert(resp_p->resp != NULL);
+        rc = resp_p->resp->ret;
+        errno = resp_p->resp->error_code;
+        chitcpd_msg__free_unpacked(resp_p, NULL);
+
+        if (rc < 0)
+            return rc;
 
         *((int*)daemon_socket_ptr) = daemon_socket;
 

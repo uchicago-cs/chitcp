@@ -46,6 +46,10 @@
 /* Macro for getting a sockfd from a pointer in the socket table */
 #define ptr_to_fd(si, entry) ((int) (((char *)entry - (char *)si->chisocket_table) / sizeof(chisocketentry_t)))
 
+
+int chitcpd_init_debug_connection(serverinfo_t *si, int sockfd, int event_flags, int client_socket);
+
+
 /*
  * chitcpd_debug_breakpoint - An easy interface for adding a breakpoint to
  *      the daemon. All arguments except SI will be forwarded to the client's
@@ -63,5 +67,12 @@
  *          
  */
 enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockfd, int event_flag, int new_sockfd);
+
+/*
+ * When closing a chisocketentry_t,
+ * call this function to make sure that its debug_monitor is destroyed
+ * once no chisockets refer to it.
+ */
+void chitcpd_debug_detach_monitor(chisocketentry_t *entry);
 
 #endif /* BREAKPOINT_H_ */

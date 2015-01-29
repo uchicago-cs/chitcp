@@ -3,6 +3,7 @@ enum ChitcpdMsgCode {
      * Note: when compiled, these will generate C enums of the form
      * CHITCPD_MSG_CODE__SOCKET
      */
+    INIT = 0;
     SOCKET = 1;
     BIND = 2;
     LISTEN = 3;
@@ -19,22 +20,37 @@ enum ChitcpdMsgCode {
     WAIT_FOR_STATE = 14;
 }
 
+enum ChitcpdConnectionType {
+    COMMAND_CONNECTION = 0;
+    DEBUG_CONNECTION = 1;
+}
+
 message ChitcpdMsg {
     required ChitcpdMsgCode code = 1 ; /* for dispatch table */
-    optional ChitcpdSocketArgs socket_args = 2; 
-    optional ChitcpdBindArgs bind_args = 3; 
-    optional ChitcpdListenArgs listen_args = 4; 
-    optional ChitcpdAcceptArgs accept_args = 5; 
-    optional ChitcpdConnectArgs connect_args = 6; 
-    optional ChitcpdRecvArgs recv_args = 7; 
-    optional ChitcpdSendArgs send_args = 8; 
-    optional ChitcpdCloseArgs close_args = 9;
-    optional ChitcpdGetSocketStateArgs get_socket_state_args = 10;
-    optional ChitcpdGetSocketBufferContentsArgs get_socket_buffer_contents_args = 11;
-    optional ChitcpdResp resp = 12;
-    optional ChitcpdDebugArgs debug_args = 13;
+    optional ChitcpdInitArgs init_args = 2; 
+    optional ChitcpdSocketArgs socket_args = 3; 
+    optional ChitcpdBindArgs bind_args = 4; 
+    optional ChitcpdListenArgs listen_args = 5; 
+    optional ChitcpdAcceptArgs accept_args = 6; 
+    optional ChitcpdConnectArgs connect_args = 7; 
+    optional ChitcpdRecvArgs recv_args = 8; 
+    optional ChitcpdSendArgs send_args = 9; 
+    optional ChitcpdCloseArgs close_args = 10;
+    optional ChitcpdGetSocketStateArgs get_socket_state_args = 11;
+    optional ChitcpdGetSocketBufferContentsArgs get_socket_buffer_contents_args = 12;
+    optional ChitcpdResp resp = 13;
     optional ChitcpdDebugEventArgs debug_event_args = 14;
     optional ChitcpdWaitForStateArgs wait_for_state_args = 15;
+}
+
+message ChitcpdInitArgs {
+    required ChitcpdConnectionType connection_type = 1;
+    optional ChitcpdDebugArgs debug = 2;
+}
+
+message ChitcpdDebugArgs {
+    required int32 sockfd = 1; /* in the future, might change to "repeated" */
+    required int32 event_flags = 2; /* which events to listen for */
 }
 
 message ChitcpdSocketArgs {
@@ -76,11 +92,6 @@ message ChitcpdSendArgs {
 
 message ChitcpdCloseArgs {
     required int32 sockfd = 1;
-}
-
-message ChitcpdDebugArgs {
-    required int32 sockfd = 1; /* in the future, might change to "repeated" */
-    required int32 event_flags = 2; /* which events to listen for */
 }
 
 message ChitcpdDebugEventArgs {

@@ -40,9 +40,59 @@
 #include "breakpoint.h"
 #include <pthread.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "protobuf-wrapper.h"
 #include "chitcp/log.h"
 #include "serverinfo.h"
+
+
+int chitcpd_init_debug_connection(serverinfo_t *si, int sockfd, int event_flags, int client_socket)
+{
+    debug_monitor_t *debug_mon;
+
+    chilog(TRACE, ">>> Initializing debug connection");
+
+    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
+    {
+        chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
+        return EBADF;
+    }
+
+    debug_mon = malloc(sizeof(debug_monitor_t));
+    if (!debug_mon)
+    {
+        return errno;
+    }
+    pthread_mutex_init(&debug_mon->lock_numwaiters, NULL);
+    debug_mon->numwaiters = 0;
+    debug_mon->dying = FALSE;
+    pthread_mutex_init(&debug_mon->lock_sockfd, NULL);
+    debug_mon->sockfd = client_socket;
+    debug_mon->ref_count = 1;
+
+    chisocketentry_t *entry = &si->chisocket_table[sockfd];
+    pthread_mutex_lock(&entry->lock_debug_monitor);
+    if (entry->debug_monitor != NULL)
+    {
+        /* Some other thread is already registered as debugging this socket */
+        chilog(TRACE, "Socket %d already has a debug monitor", sockfd);
+        pthread_mutex_unlock(&entry->lock_debug_monitor);
+        pthread_mutex_destroy(&debug_mon->lock_numwaiters);
+        pthread_mutex_destroy(&debug_mon->lock_sockfd);
+        free(debug_mon);
+        return EAGAIN;
+    }
+
+    entry->event_flags = event_flags;
+    entry->debug_monitor = debug_mon;
+    pthread_mutex_unlock(&entry->lock_debug_monitor);
+
+    chilog(DEBUG, "Created new debug monitor for socket %d", sockfd);
+    chilog(TRACE, "<<< Finished initializing debug connection");
+
+    return CHITCP_OK;
+}
+
 
 /* chitcpd_debug_breakpoint - If SOCKFD has a debug monitor which is watching
  *                  - events of type EVENT_FLAG, sends a debug event message

@@ -138,8 +138,6 @@ void* chitcpd_handler_dispatch(void *args)
     ChitcpdMsg *req;
     ChitcpdMsg resp_outer = CHITCPD_MSG__INIT;
     ChitcpdResp resp_inner = CHITCPD_RESP__INIT;
-    bool_t is_command_connection = FALSE; /* Has a command other than DEBUG
-                                             been sent to this connection? */
     bool_t done = FALSE; /* Should we keep looping? */
     int rc;
 
@@ -158,34 +156,8 @@ void* chitcpd_handler_dispatch(void *args)
          * prevent a race condition when the server is shutting down */
         pthread_mutex_lock(handler_lock);
 
-        /* Debug requests require special handling */
-        if (req->code == CHITCPD_MSG_CODE__DEBUG)
-        {
-            done = TRUE;
-
-            if (is_command_connection)
-            {
-                chilog(ERROR, "Attempt to start debug mode from a "
-                       "command-based connection.");
-                close(client_socket);
-            }
-            else
-            {
-                /* This function will not return except on error.
-                 * (If successful, it calls pthread_exit().) */
-                pthread_mutex_unlock(handler_lock);
-                rc = chitcpd_handle_CHITCPD_MSG_CODE__DEBUG(
-                         si, req, &resp_outer, &resp_inner, client_socket);
-            }
-        }
-        else
-        {
-            /* We will no longer allow debug requests on this connection */
-            is_command_connection = TRUE;
-
-            /* Call handler function using dispatch table */
-            rc = handlers[req->code](si, req, &resp_inner);
-        }
+        /* Call handler function using dispatch table */
+        rc = handlers[req->code](si, req, &resp_inner);
 
         chitcpd_msg__free_unpacked(req, NULL);
 
@@ -263,82 +235,6 @@ void* chitcpd_handler_dispatch(void *args)
     return NULL;
 }
 
-/* Handler for chitcpd_debug() */
-int chitcpd_handle_CHITCPD_MSG_CODE__DEBUG(serverinfo_t *si, ChitcpdMsg *req, ChitcpdMsg *resp_outer, ChitcpdResp *resp_inner, int client_sockfd)
-{
-    int sockfd, event_flags, rc;
-    debug_monitor_t *debug_mon;
-
-    chilog(TRACE, ">>> Entering handler for CHITCPD_MSG_CODE__DEBUG");
-
-    /* Unpack request */
-    assert(req->debug_args != NULL);
-    sockfd = req->debug_args->sockfd;
-    event_flags = req->debug_args->event_flags;
-
-    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
-    {
-        chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
-        resp_inner->ret = -1;
-        resp_inner->error_code = EBADF;
-        return CHITCP_ESOCKET;
-    }
-
-    debug_mon = malloc(sizeof(debug_monitor_t));
-    if (!debug_mon)
-    {
-        resp_inner->ret = -1;
-        resp_inner->error_code = errno;
-        return CHITCP_ENOMEM;
-    }
-    pthread_mutex_init(&debug_mon->lock_numwaiters, NULL);
-    debug_mon->numwaiters = 0;
-    debug_mon->dying = FALSE;
-    pthread_mutex_init(&debug_mon->lock_sockfd, NULL);
-    debug_mon->sockfd = client_sockfd;
-
-    chisocketentry_t *entry = &si->chisocket_table[sockfd];
-    pthread_mutex_lock(&entry->lock_debug_monitor);
-    if (entry->debug_monitor != NULL)
-    {
-        /* Some other thread is already registered as debugging this socket */
-        chilog(TRACE, "Socket %d already has a debug monitor", sockfd);
-        pthread_mutex_unlock(&entry->lock_debug_monitor);
-        resp_inner->ret = -1;
-        resp_inner->error_code = EAGAIN;
-        pthread_mutex_destroy(&debug_mon->lock_numwaiters);
-        pthread_mutex_destroy(&debug_mon->lock_sockfd);
-        free(debug_mon);
-        return CHITCP_ESOCKET;
-    }
-
-    /* After this point, this function doesn't return; it calls pthread_exit */
-
-    chitcpd_msg__free_unpacked(req, NULL);
-
-    resp_inner->ret = 0; /* CHITCP_OK */
-    rc = chitcpd_send_msg(client_sockfd, resp_outer);
-    if (rc == -1)
-        fprintf(stderr, "Client closed connection.\n");
-    if (rc < 0)
-    {
-        pthread_mutex_unlock(&entry->lock_debug_monitor);
-        pthread_mutex_destroy(&debug_mon->lock_numwaiters);
-        pthread_mutex_destroy(&debug_mon->lock_sockfd);
-        free(debug_mon);
-        pthread_exit(NULL);
-    }
-
-    chilog(TRACE, "Created new debug monitor for socket %d", sockfd);
-
-    entry->event_flags = event_flags;
-    entry->debug_monitor = debug_mon;
-    pthread_mutex_unlock(&entry->lock_debug_monitor);
-
-    chilog(TRACE, "<<< Exiting handler for CHITCPD_MSG_CODE__DEBUG");
-
-    pthread_exit(NULL);
-}
 
 
 /* Handler for chisocket_socket() */

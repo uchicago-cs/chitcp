@@ -71,6 +71,8 @@
 #include "server.h"
 #include "connection.h"
 #include "handlers.h"
+#include "breakpoint.h"
+#include "protobuf-wrapper.h"
 #include "chitcp/chitcpd.h"
 #include "chitcp/log.h"
 #include "chitcp/addr.h"
@@ -370,6 +372,15 @@ void* chitcpd_server_thread_func(void *args)
     serverinfo_t *si;
     handler_thread_args_t *ha;
     list_t handler_thread_list;
+    int rc;
+    ChitcpdMsg *req;
+    ChitcpdInitArgs *init_args;
+    ChitcpdConnectionType conntype;
+    ChitcpdMsg resp_outer = CHITCPD_MSG__INIT;
+    ChitcpdResp resp_inner = CHITCPD_RESP__INIT;
+
+    resp_outer.code = CHITCPD_MSG_CODE__RESP;
+    resp_outer.resp = &resp_inner;
 
     /* For naming the handler threads we create (for debugging/logging) */
     char next_thread_name[16];
@@ -387,15 +398,11 @@ void* chitcpd_server_thread_func(void *args)
     /* Accept connections on the UNIX socket */
     for(;;)
     {
-        /* Create arguments for handler thread */
-        ha = malloc(sizeof(handler_thread_args_t));
-        ha->si = si;
+        socket_t client_socket;
 
         /* Accept a connection */
-        handler_thread = malloc(sizeof(handler_thread_t));
-        pthread_mutex_init(&handler_thread->handler_lock, NULL);
         sunSize = sizeof(client_addr);
-        if ((handler_thread->handler_socket = accept(si->server_socket, (struct sockaddr *)&client_addr, &sunSize)) == -1)
+        if ((client_socket = accept(si->server_socket, (struct sockaddr *)&client_addr, &sunSize)) == -1)
         {
             /* If accept() returns in the CHITCPD_STATE_STOPPING, we don't
              * care what the error is. We just break out of the loop and
@@ -405,29 +412,128 @@ void* chitcpd_server_thread_func(void *args)
 
             /* If this particular connection fails, no need to kill the entire thread. */
             perror("Could not accept() connection on UNIX socket");
-            free(ha);
             continue;
         }
 
-        /* Create handler thread to handle this connection */
-        ha->client_socket = handler_thread->handler_socket;
-        ha->handler_lock = &handler_thread->handler_lock;
-        if (pthread_create(&handler_thread->thread, NULL, chitcpd_handler_dispatch, ha) != 0)
+        /* We receive a single message, which has to be an INIT message */
+        rc = chitcpd_recv_msg(client_socket, &req);
+        if (rc < 0)
         {
-            perror("Could not create a worker thread");
-            free(ha);
-            close(ha->client_socket);
-            close(si->server_socket);
-            // TODO: Perform an orderly shutdown instead of exiting
-            pthread_exit(NULL);
+            if(si->state == CHITCPD_STATE_STOPPING)
+                break;
+            else
+            {
+                chilog(ERROR, "Error when receiving lead message through UNIX socket");
+                shutdown(client_socket, SHUT_RDWR);
+                continue;
+            }
         }
 
-        list_append(&handler_thread_list, handler_thread);
+        if(req->code != CHITCPD_MSG_CODE__INIT)
+        {
+            chilog(ERROR, "Expected INIT message, instead got message code %i", req->code);
+            chitcpd_msg__free_unpacked(req, NULL);
+            shutdown(client_socket, SHUT_RDWR);
+            continue;
+        }
+
+        /* Unpack INIT request */
+        assert(req->init_args != NULL);
+        init_args = req->init_args;
+
+        conntype = init_args->connection_type;
+
+
+        /* There are two types of connections: command connections and debug
+         * connections.
+         *
+         * When a command connection is created, a new thread is created to
+         * handle the incoming chisocket commands on that connection (socket,
+         * send, recv, etc.)
+         *
+         * When a debug connection is created, no additional thread is necessary.
+         * The connection on the UNIX socket is simply "handed off" to a
+         * debug monitor that will be associated with a chiTCP socket.
+         * That UNIX socket is then used to send back debug messages.
+         */
+
+        if (conntype == CHITCPD_CONNECTION_TYPE__COMMAND_CONNECTION)
+        {
+            /* Create arguments for handler thread */
+            ha = malloc(sizeof(handler_thread_args_t));
+            ha->si = si;
+
+            handler_thread = malloc(sizeof(handler_thread_t));
+            handler_thread->handler_socket = client_socket;
+            pthread_mutex_init(&handler_thread->handler_lock, NULL);
+
+            /* Create handler thread to handle this connection */
+            ha->client_socket = handler_thread->handler_socket;
+            ha->handler_lock = &handler_thread->handler_lock;
+            snprintf(ha->thread_name, 16, "handler-%d", next_thread_id++);
+            if (pthread_create(&handler_thread->thread, NULL, chitcpd_handler_dispatch, ha) != 0)
+            {
+                perror("Could not create a worker thread");
+
+                resp_outer.resp->ret = CHITCP_ETHREAD;
+                resp_outer.resp->error_code = 0;
+                rc = chitcpd_send_msg(client_socket, &resp_outer);
+
+                free(ha);
+                close(ha->client_socket);
+                close(si->server_socket);
+                // TODO: Perform an orderly shutdown instead of exiting
+                pthread_exit(NULL);
+            }
+            resp_outer.resp->ret = CHITCP_OK;
+            resp_outer.resp->error_code = 0;
+            rc = chitcpd_send_msg(client_socket, &resp_outer);
+
+            list_append(&handler_thread_list, handler_thread);
+        }
+        else if(conntype == CHITCPD_CONNECTION_TYPE__DEBUG_CONNECTION)
+        {
+            int debug_sockfd, debug_event_flags;
+            ChitcpdDebugArgs *debug_args;
+
+            /* Unpack debug parameter */
+            assert(init_args->debug != NULL);
+            debug_args = init_args->debug;
+
+            debug_sockfd = debug_args->sockfd;
+            debug_event_flags = debug_args->event_flags;
+
+            rc = chitcpd_init_debug_connection(si, debug_sockfd, debug_event_flags, client_socket);
+            if(rc == CHITCP_OK)
+            {
+                resp_outer.resp->ret = CHITCP_OK;
+                resp_outer.resp->error_code = 0;
+                rc = chitcpd_send_msg(client_socket, &resp_outer);
+            }
+            else
+            {
+                chilog(ERROR, "Error when creating debug connection for socket %i", debug_sockfd);
+                resp_outer.resp->ret = CHITCP_EINIT;
+                resp_outer.resp->error_code = rc;
+                rc = chitcpd_send_msg(client_socket, &resp_outer);
+
+                shutdown(client_socket, SHUT_RDWR);
+            }
+        }
+        else
+        {
+            chilog(ERROR, "Received INIT message with unknown connection type %i", conntype);
+            resp_outer.resp->ret = CHITCP_EINVAL;
+            resp_outer.resp->error_code = 0;
+            rc = chitcpd_send_msg(client_socket, &resp_outer);
+            shutdown(client_socket, SHUT_RDWR);
+        }
 
         /* TODO: have this happen before the handler thread starts (to avoid
          * race conditions). */
         snprintf(next_thread_name, 16, "handler-%d", next_thread_id++);
         pthread_setname_np(handler_thread->thread, next_thread_name);
+        chitcpd_msg__free_unpacked(req, NULL);
     }
 
     while(!list_empty(&handler_thread_list))

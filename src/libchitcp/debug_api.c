@@ -156,6 +156,7 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler)
     int rc;
     int daemon_fd;
     ChitcpdMsg msg = CHITCPD_MSG__INIT;
+    ChitcpdInitArgs ia = CHITCPD_INIT_ARGS__INIT;
     ChitcpdDebugArgs da = CHITCPD_DEBUG_ARGS__INIT;
     ChitcpdMsg *resp_p;
     struct debug_thread_args *dbt_args;
@@ -172,8 +173,10 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler)
     }
 
     /* Let the daemon know this is a debug connection */
-    msg.code = CHITCPD_MSG_CODE__DEBUG;
-    msg.debug_args = &da;
+    msg.code = CHITCPD_MSG_CODE__INIT;
+    msg.init_args = &ia;
+    msg.init_args->connection_type = CHITCPD_CONNECTION_TYPE__DEBUG_CONNECTION;
+    msg.init_args->debug = &da;
 
     da.sockfd = sockfd;
     da.event_flags = event_flags;
