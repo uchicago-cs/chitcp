@@ -125,12 +125,12 @@ typedef struct tcp_data
     uint32_t ISS;      /* Initial send sequence number */
     uint32_t SND_UNA;  /* First byte sent but not acknowledged */
     uint32_t SND_NXT;  /* Next sendable byte */
-    uint32_t SND_WND;  /* Send Window */
+    uint16_t SND_WND;  /* Send Window */
 
     /* Receive sequence variables */
     uint32_t IRS;      /* Initial receive sequence number */
     uint32_t RCV_NXT;  /* Next byte expected */
-    uint32_t RCV_WND;  /* Receive Window */
+    uint16_t RCV_WND;  /* Receive Window */
 
     /* Buffers */
     circular_buffer_t send;
