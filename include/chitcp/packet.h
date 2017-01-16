@@ -40,8 +40,10 @@
 #ifndef CHITCP_PACKET_H_
 #define CHITCP_PACKET_H_
 
-#include <stddef.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
+#include <netinet/in.h>
 
 
 /*
@@ -89,7 +91,7 @@ typedef struct tcp_packet
  *
  * Returns: the size in bytes of the TCP packet.
  */
-int  chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len);
+int chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len);
 
 
 /*
@@ -106,6 +108,15 @@ int  chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint
 void chitcp_tcp_packet_free(tcp_packet_t *packet);
 
 
+/* Struct to contain a withheld TCP packet */
+/* struct to contain a single TCP packet */
+typedef struct withheld_tcp_packet
+{
+    tcp_packet_t *packet;
+    struct sockaddr_storage local_addr;
+    struct sockaddr_storage remote_addr;
+    bool duplicate;
+} withheld_tcp_packet_t;
 
 /*
  *

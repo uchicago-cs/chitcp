@@ -50,7 +50,6 @@
 
 
 #include "chitcp/types.h"
-#include "chitcp/log.h"
 #include "chitcp/packet.h"
 
 

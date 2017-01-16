@@ -54,7 +54,7 @@ static void debug_mon_lock(debug_monitor_t *debug_mon, pthread_mutex_t *mutex_to
 static void debug_mon_remove_from_chisocket_table(serverinfo_t *si, debug_monitor_t *debug_mon);
 static void attach_monitor_and_flags_to_entry(debug_monitor_t *debug_mon, int event_flags, chisocketentry_t *entry);
 static void detach_monitor_from_entry(debug_monitor_t *debug_mon, chisocketentry_t *entry);
-static int exchange_breakpoint_messages(debug_monitor_t *debug_mon, int sockfd, int event_flag, int new_sockfd);
+static int exchange_breakpoint_messages(debug_monitor_t *debug_mon, int sockfd, int event_flag, int new_sockfd, bool_t is_active);
 static bool_t socket_monitors_event(chisocketentry_t *entry, int event_flag);
 static debug_monitor_t *obtain_debug_mon(chisocketentry_t *entry, int event_flag);
 static bool_t valid_parameters(serverinfo_t *si, int sockfd, int event_flag);
@@ -135,7 +135,7 @@ enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockf
            dbg_evt_str(event_flag));
 
     /* The breakpoint proper. */
-    int response = exchange_breakpoint_messages(debug_mon, sockfd, event_flag, new_sockfd);
+    int response = exchange_breakpoint_messages(debug_mon, sockfd, event_flag, new_sockfd, entry->actpas_type == SOCKET_ACTIVE);
     
     /* Certain client responses must be handled BEFORE we return. */
     handle_special_breakpoint_responses(&response, si, entry, debug_mon, event_flag, new_sockfd);
@@ -222,7 +222,7 @@ static bool_t socket_monitors_event(chisocketentry_t *entry, int event_flag)
 }
 
 /* Ensure debug_mon is locked before calling. */
-static int exchange_breakpoint_messages(debug_monitor_t *debug_mon, int sockfd, int event_flag, int new_sockfd)
+static int exchange_breakpoint_messages(debug_monitor_t *debug_mon, int sockfd, int event_flag, int new_sockfd, bool_t is_active)
 {
     ChitcpdMsg req = CHITCPD_MSG__INIT;
     ChitcpdDebugEventArgs dea = CHITCPD_DEBUG_EVENT_ARGS__INIT;
@@ -233,6 +233,7 @@ static int exchange_breakpoint_messages(debug_monitor_t *debug_mon, int sockfd, 
     dea.sockfd = sockfd;
     dea.event_flag = event_flag;
     dea.new_sockfd = new_sockfd;
+    dea.is_active = is_active;
 
     ChitcpdMsg *resp;
     int r = chitcpd_send_and_recv_msg(debug_mon->sockfd, &req, &resp);

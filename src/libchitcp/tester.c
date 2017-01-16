@@ -162,8 +162,8 @@ int chitcp_tester_server_run_set(chitcp_tester_t* tester, chitcp_tester_runnable
 int chitcp_tester_server_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state)
 {
     if(tester->server->state == STATE_UNINITIALIZED ||
-            tester->server->state == STATE_INITIALIZED ||
-            tester->server->state == STATE_SERVER_LISTENING)
+       tester->server->state == STATE_INITIALIZED ||
+       tester->server->state == STATE_SERVER_LISTENING)
         chitcp_tester_peer_wait_for_state(tester->server, STATE_SERVER_READY);
 
     chitcpd_wait_for_state(tester->server->sockfd, tcp_state);
@@ -176,8 +176,8 @@ int chitcp_tester_server_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp
 int chitcp_tester_client_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state)
 {
     if(tester->client->state == STATE_UNINITIALIZED ||
-            tester->client->state == STATE_INITIALIZED ||
-            tester->client->state == STATE_CLIENT_CONNECTING)
+       tester->client->state == STATE_INITIALIZED ||
+       tester->client->state == STATE_CLIENT_CONNECTING)
         chitcp_tester_peer_wait_for_state(tester->client, STATE_CLIENT_READY);
 
     chitcpd_wait_for_state(tester->client->sockfd, tcp_state);

@@ -225,8 +225,11 @@ void* chitcpd_handler_dispatch(void *args)
              * RST's so we simply "force close" each socket. */
 
             if(entry->actpas_type == SOCKET_ACTIVE)
+            {
                 /* Any transition to CLOSED will force a termination of the TCP thread */
                 chitcpd_update_tcp_state(si, entry, CLOSED);
+                pthread_join(entry->socket_state.active.tcp_thread, NULL);
+            }
             else if(entry->actpas_type == SOCKET_PASSIVE)
                 chitcpd_free_socket_entry(si, entry);
 
@@ -507,6 +510,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
         goto done;
     }
 
+    chilog(MINIMAL, "[S%i] Passive socket has spawned active socket S%i", sockfd, socket_index);
+
     /* Initialize the socket entry */
     chisocketentry_t *active_entry = &si->chisocket_table[socket_index];
     active_chisocket_state_t *active_socket_state = &active_entry->socket_state.active;
@@ -520,7 +525,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     active_entry->actpas_type = SOCKET_ACTIVE;
     active_socket_state->parent_socket = entry;
 
-    tcp_data_init(&active_socket_state->tcp_data);
+    tcp_data_init(si, active_entry);
 
     active_socket_state->flags.raw = 0;
     pthread_mutex_init(&active_socket_state->lock_event, NULL);
@@ -534,6 +539,11 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     enum chitcpd_debug_response r =
         chitcpd_debug_breakpoint(si, sockfd, DBG_EVT_PENDING_CONNECTION, socket_index);
 
+    if (r != DBG_RESP_NONE)
+    {
+        chilog(ERROR, "Unexpected return value in DBG_EVT_PENDING_CONNECTION breakpoint.");
+    }
+
     /* Linking of the debug monitor to the new socket
      * (if r == DBG_RESP_ACCEPT_MONITOR) is actually performed _within_
      * chitcpd_debug_breakpoint, in order to avoid a race condition. */
@@ -546,39 +556,23 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
      * correctly happen in the TCP thread. */
     active_entry->tcp_state = LISTEN;
 
-    /* Trigger the INCOMING_PACKET event, now that we know which socket
-     * the packet is going to. */
-    r = chitcpd_debug_breakpoint(si, socket_index, DBG_EVT_INCOMING_PACKET, -1);
-
     pthread_mutex_lock(&active_socket_state->tcp_data.lock_pending_packets);
-    if (r == DBG_RESP_NONE || r == DBG_RESP_DUPLICATE || r == DBG_RESP_DRAW_WITHHELD)
-    {
-        chilog(TRACE, "accept() initial packet: enqueueing a copy");
-        list_append(&active_socket_state->tcp_data.pending_packets, pending_connection->initial_packet);
-    }
-    if (r == DBG_RESP_WITHHOLD || r == DBG_RESP_DUPLICATE)
-    {
-        chilog(TRACE, "accept() initial packet: withholding a copy");
-        list_append(&active_socket_state->tcp_data.withheld_packets, pending_connection->initial_packet);
-    }
-    /* otherwise r == DBG_RESP_DROP and we do nothing */
+    chilog(TRACE, "accept() initial packet: enqueueing a copy");
+    list_append(&active_socket_state->tcp_data.pending_packets, pending_connection->initial_packet);
     pthread_mutex_unlock(&active_socket_state->tcp_data.lock_pending_packets);
 
     /* Start TCP thread */
     chitcpd_tcp_start_thread(si, &si->chisocket_table[socket_index]);
 
     pthread_mutex_lock(&active_entry->lock_tcp_state);
-    if (r == DBG_RESP_NONE || r == DBG_RESP_DUPLICATE || r == DBG_RESP_DRAW_WITHHELD)
-    {
-        /* Signal the thread to indicate there is an incoming packet
-         * Assuming it's a SYN packet, this will initiate the three-way
-         * handshake with the peer */
-        chilog(TRACE, "Signaling socket thread...");
-        pthread_mutex_lock(&active_socket_state->lock_event);
-        active_socket_state->flags.net_recv = 1;
-        pthread_cond_broadcast(&active_socket_state->cv_event);
-        pthread_mutex_unlock(&active_socket_state->lock_event);
-    }
+    /* Signal the thread to indicate there is an incoming packet
+     * Assuming it's a SYN packet, this will initiate the three-way
+     * handshake with the peer */
+    chilog(TRACE, "Signaling socket thread...");
+    pthread_mutex_lock(&active_socket_state->lock_event);
+    active_socket_state->flags.net_recv = 1;
+    pthread_cond_broadcast(&active_socket_state->cv_event);
+    pthread_mutex_unlock(&active_socket_state->lock_event);
 
     /* Wait for socket to enter ESTABLISHED state */
     chilog(TRACE, "Waiting for ESTABLISHED...");
@@ -688,7 +682,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     entry->actpas_type = SOCKET_ACTIVE;
     socket_state = &entry->socket_state.active;
 
-    tcp_data_init(&socket_state->tcp_data);
+    tcp_data_init(si, entry);
 
     socket_state->flags.raw = 0;
     pthread_mutex_init(&socket_state->lock_event, NULL);
@@ -700,13 +694,20 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
      * to the ANY address. This is not ideal, but will work.
      * Ideally, we would query the routing table to determine what
      * interface we would use for the specified remote_address, and
-     * set the local_address to the address of that interface. */
+     * set the local_address to the address of that interface.
+     *
+     * Note: We treat the loopback address as a special case because
+     * that is what will be used for the tests. */
     bzero(&entry->local_addr, sizeof(struct sockaddr_storage));
+    if (chitcp_addr_is_loopback((struct sockaddr *) &addr))
+    {
+        memcpy(&entry->local_addr,  &addr, sizeof(struct sockaddr_storage));
+    }
     entry->local_addr.ss_family = addr.ss_family;
     chitcp_set_addr_port((struct sockaddr *) &entry->local_addr, chitcp_htons(port));
 
     /* Copy remote address */
-    memcpy(&entry->remote_addr,  &addr, sizeof(struct sockaddr_storage));
+    memcpy(&entry->remote_addr, &addr, sizeof(struct sockaddr_storage));
 
     /* Update port table */
     si->port_table[port] = entry;
@@ -727,8 +728,33 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
 
     /* Wait for socket to enter ESTABLISHED state */
     chilog(TRACE, "Waiting for ESTABLISHED...");
+    /* TODO: There is a potential race condition here, where the thread
+     *       will wake up to check the condition variable, but it will have
+     *       gone past the ESTABLISHED state because the peer has already
+     *       initiated a condition teardown. So far, this race condition
+     *       only manifested itself in the tests, and we fixed that
+     *       by ensuring the tests don't initiate a connection tear-down until
+     *       the socket is in an ESTABLISHED state.
+     *
+     *       Solving this issue would require additional variables / synchronization
+     *       to ensure that a connection teardown cannot be initiated if the socket
+     *       is in ESTABLISHED state by connect() hasn't returned yet.
+     */
     while(entry->tcp_state != ESTABLISHED)
-        pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
+    {
+        struct timespec ts;
+        int rc;
+
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 1;
+
+        /* TODO: Implement ETIMEDOUT return value in connect() */
+        rc = pthread_cond_timedwait(&entry->cv_tcp_state, &entry->lock_tcp_state, &ts);
+        if (rc == ETIMEDOUT)
+        {
+            chilog(TRACE, "Waiting for ESTABLISHED... [timeout, state=%i]", entry->tcp_state);
+        }
+    }
     pthread_mutex_unlock(&entry->lock_tcp_state);
 
     chilog(TRACE, "Socket connection is ESTABLISHED");
@@ -1109,12 +1135,25 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
     }
     else if (entry->tcp_state == CLOSE_WAIT)
     {
-        while( entry->tcp_state != LAST_ACK )
+        while(! (entry->tcp_state == LAST_ACK || entry->tcp_state == CLOSED) )
             pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
     }
-    pthread_mutex_unlock(&entry->lock_tcp_state);
 
-    chilog(TRACE, "Socket connection is closing");
+    if (entry->tcp_state == CLOSED)
+        chilog(TRACE, "Socket is in CLOSED state");
+    else if (entry->tcp_state == FIN_WAIT_2 || entry->tcp_state == CLOSING ||
+             entry->tcp_state == TIME_WAIT  || entry->tcp_state == LAST_ACK )
+        chilog(TRACE, "Socket entered a closing state");
+    else
+    {
+        chilog(ERROR, "Socket entered an inconsistent state %i", entry->tcp_state);
+        ret = -1;
+        error_code = EBADF;
+        pthread_mutex_unlock(&entry->lock_tcp_state);
+        goto done;
+    }
+
+    pthread_mutex_unlock(&entry->lock_tcp_state);
 
     ret = 0;
 
@@ -1281,6 +1320,14 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
     sockfd = req->sockfd;
     tcp_state = req->tcp_state;
 
+    if(si->chisocket_table[sockfd].available && tcp_state == CLOSED)
+    {
+        chilog(TRACE, "Waiting for CLOSED, but socket %i has already been freed, so returning", sockfd);
+        ret = 0;
+
+        goto done;
+    }
+
     if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available || si->chisocket_table[sockfd].actpas_type != SOCKET_ACTIVE)
     {
         chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
@@ -1298,7 +1345,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
         goto done;
     }
 
-    chilog(TRACE, "Socket %i is %s. Waiting for %s.", sockfd, tcp_str(entry->tcp_state), tcp_str(tcp_state));    pthread_mutex_lock(&entry->lock_tcp_state);
+    pthread_mutex_lock(&entry->lock_tcp_state);
+    chilog(TRACE, "Socket %i is %s. Waiting for %s.", sockfd, tcp_str(entry->tcp_state), tcp_str(tcp_state));
     while(entry->tcp_state != tcp_state)
     {
         pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);

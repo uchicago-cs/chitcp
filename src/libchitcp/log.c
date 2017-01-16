@@ -46,6 +46,7 @@
 #include <pthread.h> /* for pthread_self */
 
 #include "chitcp/log.h"
+#include "chitcp/addr.h"
 
 
 /* Logging level. Set by default to print just errors */
@@ -60,15 +61,21 @@ void chitcp_setloglevel(loglevel_t level)
 
 void chilog(loglevel_t level, char *fmt, ...)
 {
-    time_t t;
-    char buf[80], *levelstr;
+    struct timespec ts;
+    struct tm *tm;
+    char timefmt[64], buf[80], *levelstr;
     va_list argptr;
 
     if(level > loglevel)
         return;
 
-    t = time(NULL);
-    strftime(buf,80,"%Y-%m-%d %H:%M:%S",localtime(&t));
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    if((tm = localtime(&ts.tv_sec)) != NULL)
+    {
+            strftime(timefmt, sizeof(timefmt), "%H:%M:%S.%%09u", tm);
+            snprintf(buf, sizeof(buf), timefmt, ts.tv_nsec);
+    }
 
     switch(level)
     {
@@ -80,6 +87,9 @@ void chilog(loglevel_t level, char *fmt, ...)
         break;
     case WARNING:
         levelstr = "WARN";
+        break;
+    case MINIMAL:
+        levelstr = "MINIMAL";
         break;
     case INFO:
         levelstr = "INFO";
@@ -100,7 +110,10 @@ void chilog(loglevel_t level, char *fmt, ...)
     pthread_getname_np(pthread_self(), threadname, 16);
 
     flockfile(stdout);
-    printf("[%s] %6s %s ", buf, levelstr, threadname);
+    if (loglevel == MINIMAL)
+        printf("[%s] %16s ", buf, threadname);
+    else
+        printf("[%s] %7s %16s ", buf, levelstr, threadname);
     va_start(argptr, fmt);
     vprintf(fmt, argptr);
     printf("\n");
@@ -109,6 +122,66 @@ void chilog(loglevel_t level, char *fmt, ...)
     fflush(stdout);
 }
 
+static char* srcdst_str(struct sockaddr *src, struct sockaddr *dst, char *buf, int len)
+{
+    char ipsrc[INET6_ADDRSTRLEN], ipdst[INET6_ADDRSTRLEN];
+    uint32_t portsrc, portdst;
+
+    inet_ntop(src->sa_family, chitcp_get_addr(src), ipsrc, sizeof(ipsrc));
+    portsrc = chitcp_get_addr_port(src);
+    portsrc = chitcp_ntohs(portsrc);
+
+    inet_ntop(dst->sa_family, chitcp_get_addr(dst), ipdst, sizeof(ipdst));
+    portdst = chitcp_get_addr_port(dst);
+    portdst = chitcp_ntohs(portdst);
+
+    snprintf(buf, len, "%s.%i > %s.%i", ipsrc, portsrc, ipdst, portdst);
+
+    return buf;
+}
+
+void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, tcp_packet_t *packet, char* prefix)
+{
+    if(loglevel != MINIMAL)
+        return;
+
+    tcphdr_t *header = (tcphdr_t*) packet->raw;
+    uint16_t payload_len = TCP_PAYLOAD_LEN(packet);
+
+    char srcdst[256];
+    char flags[9];
+    char seqstr[32];
+    char ackstr[32];
+
+    srcdst_str(src, dst, srcdst, 255);
+
+    snprintf(flags, 8, "%s%s%s%s%s%s%s%s",
+            header->cwr? "W":"",
+            header->ece? "E":"",
+            header->urg? "U":"",
+            header->psh? "P":"",
+            header->rst? "R":"",
+            header->syn? "S":"",
+            header->fin? "F":"",
+            header->ack? ".":""
+    );
+
+    if(flags[0] == '\0')
+        strcpy(flags, "none");
+
+    if(payload_len)
+        snprintf(seqstr, 31, " seq %i:%i,", chitcp_ntohl(header->seq), chitcp_ntohl(header->seq) + payload_len);
+    else
+        snprintf(seqstr, 31, " seq %i,", chitcp_ntohl(header->seq));
+
+    if(header->ack)
+        snprintf(ackstr, 31, " ack %i,", chitcp_ntohl(header->ack_seq));
+    else
+        ackstr[0] = '\0';
+
+    chilog(MINIMAL, "[S%i] %s %s: Flags [%s],%s%s win %i, length %i",
+                    sockfd, prefix, srcdst, flags, seqstr, ackstr, chitcp_ntohs(header->win), payload_len);
+}
 
 void chilog_tcp(loglevel_t level, tcp_packet_t *packet, char prefix)
 {

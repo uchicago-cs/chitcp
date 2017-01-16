@@ -6,14 +6,18 @@ AC_INIT([chitcp], [1.1], [do-not-email@example.org])
 AC_CONFIG_SRCDIR([src/chitcpd/main.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_AUX_DIR([build-aux])
 
 AM_INIT_AUTOMAKE([subdir-objects])
 AM_SILENT_RULES([yes])
 
+# Silence warning: ar: 'u' modifier ignored since 'D' is the default
+AC_SUBST(AR_FLAGS, [cr])
 
 # Checks for programs.
 AC_PROG_CC
 AM_PROG_CC_C_O
+AC_PROG_AWK
 
 LT_INIT
 
@@ -41,7 +45,7 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([bzero gethostbyname gettimeofday memset socket strdup])
-PKG_CHECK_MODULES([CHECK], [check >= 0.9.14],,[AC_MSG_RESULT([no, testing is disabled])]) 
+
 PKG_CHECK_MODULES([protobuf], [protobuf >= 2.6.1])
 PKG_CHECK_MODULES([PROTOBUF_C], [libprotobuf-c >= 1.0.2],,[AC_MSG_ERROR([
   ERROR: libprotobuf-c >= 1.0.2 is required
@@ -56,6 +60,10 @@ PKG_CHECK_MODULES([PROTOBUF_C], [libprotobuf-c >= 1.0.2],,[AC_MSG_ERROR([
   libprotobuf-c.
   ])])
 AC_CHECK_PROG([PROTOC_C], [protoc-c], [protoc-c])
+
+AC_CHECK_LIB([criterion], [criterion_initialize], [], [
+  AC_MSG_ERROR([unable to find Criterion; tests will not work])
+], [])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

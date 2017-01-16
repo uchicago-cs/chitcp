@@ -41,8 +41,51 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "chitcp/socket.h"
+#include "chitcp/types.h"
 
+const char *tcp_state_names[] =
+{
+    "CLOSED",
+    "LISTEN",
+    "SYN_RCVD",
+    "SYN_SENT",
+    "ESTABLISHED",
+    "FIN_WAIT_1",
+    "FIN_WAIT_2",
+    "CLOSE_WAIT",
+    "CLOSING",
+    "TIME_WAIT",
+    "LAST_ACK"
+};
+
+
+/* See utils.h */
+uint16_t cksum (const void *_data, int len)
+{
+      const uint8_t *data = _data;
+      uint32_t sum;
+
+      for (sum = 0;len >= 2; data += 2, len -= 2)
+      {
+        sum += data[0] << 8 | data[1];
+      }
+
+      if (len > 0)
+      {
+        sum += data[0] << 8;
+      }
+
+      while (sum > 0xffff)
+      {
+        sum = (sum >> 16) + (sum & 0xffff);
+      }
+
+      sum = htons (~sum);
+
+      return sum ? sum : 0xffff;
+}
 
 int chitcp_socket_send(int socket, const void *buffer, int length)
 {
@@ -75,6 +118,7 @@ int chitcp_socket_recv(int socket, void *buffer, int length)
     while (nrecv != 0)
     {
         int nbytes = chisocket_recv(socket, recv_buf_ptr, nrecv, 0);
+
         if(nbytes == 0)
         {
             nrecv -= nbytes;
@@ -94,3 +138,27 @@ int chitcp_socket_recv(int socket, void *buffer, int length)
 
     return length - nrecv;
 }
+
+int chitcp_unix_socket(char* buf, int buflen)
+{
+    char *env;
+    env = getenv("CHITCPD_SOCK");
+
+    if (env)
+    {
+        strncpy(buf, env, buflen);
+    }
+    else
+    {
+        char *login;
+        login = getlogin();
+
+        if(login)
+            snprintf(buf, buflen, "/tmp/chitcpd.socket.%s", login);
+        else
+            strncpy(buf, "/tmp/chitcpd.socket", buflen);
+    }
+
+    return CHITCP_OK;
+}
+

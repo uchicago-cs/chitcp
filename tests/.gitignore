@@ -1,3 +1,4 @@
-check_chitcpd
-check_libchitcp
-check_tcp
+test-buffer
+test-daemon
+test-tcp
+*.trs

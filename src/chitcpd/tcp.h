@@ -105,6 +105,7 @@ static inline char *tcp_event_str (tcp_event_type_t evt)
     return tcp_event_type_names[evt-1];
 }
 
+
 /* TCP data. Roughly corresponds to the variables and buffers
  * one would expect in a Transmission Control Block (as
  * specified in RFC 793). */
@@ -114,10 +115,6 @@ typedef struct tcp_data
     list_t pending_packets;
     pthread_mutex_t lock_pending_packets;
     pthread_cond_t cv_pending_packets;
-
-    /* Queue for withheld packets (simulating unreliable network) */
-    list_t withheld_packets;
-    pthread_mutex_t lock_withheld_packets;
 
     /* Transmission control block */
 
@@ -139,8 +136,5 @@ typedef struct tcp_data
     /* Has a CLOSE been requested on this socket? */
     bool_t closing;
 } tcp_data_t;
-
-void tcp_data_init(tcp_data_t *tcp_data);
-void tcp_data_free(tcp_data_t *tcp_data);
 
 #endif /* TCP_H_ */

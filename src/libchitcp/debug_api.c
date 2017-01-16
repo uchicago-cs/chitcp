@@ -79,26 +79,6 @@ static char *event_names[] =
     "KILL"
 };
 
-static char *tcp_state_names[] =
-{
-    "CLOSED",
-    "LISTEN",
-    "SYN_RCVD",
-    "SYN_SENT",
-    "ESTABLISHED",
-    "FIN_WAIT_1",
-    "FIN_WAIT_2",
-    "CLOSE_WAIT",
-    "CLOSING",
-    "TIME_WAIT",
-    "LAST_ACK"
-};
-
-char *tcp_str(tcp_state_t state)
-{
-    return tcp_state_names[state];
-}
-
 char *dbg_evt_str(enum chitcpd_debug_event evt)
 {
     int i = 0;
@@ -252,6 +232,7 @@ static void *debug_thread(void *_args)
 {
     int rc;
     int sockfd, event_flag, new_sockfd; /* arguments for the event handler */
+    bool_t is_active;
     struct debug_thread_args *args = (struct debug_thread_args *) _args;
     int daemon_fd = args->fd;
     debug_event_handler handler = args->handler;
@@ -279,9 +260,11 @@ static void *debug_thread(void *_args)
         sockfd = event_msg->debug_event_args->sockfd;
         event_flag = event_msg->debug_event_args->event_flag;
         new_sockfd = event_msg->debug_event_args->new_sockfd;
+        is_active = event_msg->debug_event_args->is_active;
+
         chitcpd_msg__free_unpacked(event_msg, NULL);
 
-        if (event_flag == DBG_EVT_PENDING_CONNECTION || first_event)
+        if ( (!is_active && event_flag == DBG_EVT_PENDING_CONNECTION) || (is_active && first_event) )
         {
             /* If we're dealing with an active socket, we need to create an
              * active_thread upon the first debug event. In the passive case,
@@ -335,7 +318,13 @@ static void *debug_thread(void *_args)
             }
         }
 
-        if (event_flag != DBG_EVT_PENDING_CONNECTION)
+        if (!is_active)
+        {
+            resp_inner.ret = handler(sockfd, event_flag, NULL, NULL, -1);
+            if (resp_inner.ret == DBG_RESP_STOP)
+                break;
+        }
+        else if (is_active)
         {
             /* We must pass this event on to the associated active_thread. */
             struct active_thread_args *item = (struct active_thread_args *)list_seek(&active_list, &sockfd);

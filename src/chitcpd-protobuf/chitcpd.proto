@@ -98,6 +98,7 @@ message ChitcpdDebugEventArgs {
     required int32 sockfd = 1;
     required int32 event_flag = 2;
     required int32 new_sockfd = 3;
+    required bool is_active = 4;    
 }
 
 message ChitcpdGetSocketStateArgs {

@@ -73,6 +73,11 @@ typedef int bool_t;
 #define TRUE 1
 #endif
 
+#define UNIX_PATH_MAX (108)
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 
 #define RET_ON_ERROR(f, r)   \
     {                               \
@@ -132,5 +137,12 @@ typedef enum {
 } tcp_state_t;
 
 #define IS_VALID_TCP_STATE(x) ((x) >= CLOSED && (x) <= LAST_ACK)
+
+extern const char *tcp_state_names[];
+
+inline const char *tcp_str(tcp_state_t state)
+{
+    return tcp_state_names[state];
+}
 
 #endif

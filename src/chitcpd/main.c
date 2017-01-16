@@ -58,7 +58,6 @@
 #include "chitcp/log.h"
 #include "server.h"
 
-
 int main(int argc, char *argv[])
 {
     int rc;
@@ -67,6 +66,7 @@ int main(int argc, char *argv[])
     int opt;
     char *port = NULL;
     char *usocket = NULL;
+    char *cap_file = NULL;
     int verbosity = 0;
 
     /* Stop SIGPIPE from messing with our sockets */
@@ -79,9 +79,12 @@ int main(int argc, char *argv[])
     }
 
     /* Process command-line arguments */
-    while ((opt = getopt(argc, argv, "p:s:vh")) != -1)
+    while ((opt = getopt(argc, argv, "c:p:s:vh")) != -1)
         switch (opt)
         {
+        case 'c':
+            cap_file = strdup(optarg);
+            break;
         case 'p':
             port = strdup(optarg);
             break;
@@ -92,7 +95,7 @@ int main(int argc, char *argv[])
             verbosity++;
             break;
         case 'h':
-            printf("Usage: chitcpd [-p PORT] [-s UNIX_SOCKET] [(-v|-vv|-vvv)]\n");
+            printf("Usage: chitcpd [-p PORT] [-s UNIX_SOCKET] [(-v|-vv|-vvv|-vvvv)]\n");
             exit(0);
         default:
             printf("ERROR: Unknown option -%c\n", opt);
@@ -102,9 +105,6 @@ int main(int argc, char *argv[])
     if(!port)
         port = GET_CHITCPD_PORT_STRING;
 
-    if(!usocket)
-        usocket = GET_CHITCPD_SOCK;
-
     /* Set logging level based on verbosity */
     switch(verbosity)
     {
@@ -112,12 +112,15 @@ int main(int argc, char *argv[])
         chitcp_setloglevel(ERROR);
         break;
     case 1:
-        chitcp_setloglevel(INFO);
+        chitcp_setloglevel(MINIMAL);
         break;
     case 2:
-        chitcp_setloglevel(DEBUG);
+        chitcp_setloglevel(INFO);
         break;
     case 3:
+        chitcp_setloglevel(DEBUG);
+        break;
+    case 4:
         chitcp_setloglevel(TRACE);
         break;
     default:
@@ -131,7 +134,12 @@ int main(int argc, char *argv[])
 
     /* Set values in serverinfo */
     si->server_port = chitcp_htons(atoi(port));
-    si->server_socket_path = usocket;
+
+    if(usocket)
+        strncpy(si->server_socket_path, usocket, UNIX_PATH_MAX);
+    else
+        chitcp_unix_socket(si->server_socket_path, UNIX_PATH_MAX);
+    si->libpcap_file_name = cap_file;
 
     /* Run the daemon */
     rc = chitcpd_server_init(si);

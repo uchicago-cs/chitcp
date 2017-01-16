@@ -4,7 +4,7 @@
 #
 ACLOCAL_AMFLAGS = -I m4
 AM_CFLAGS = -I$(srcdir)/include -I$(srcdir)/src/chitcpd-protobuf/ -I$(srcdir)/src/simclist/ \
-            -g3 -Wall -std=gnu99 -ggdb -D_GNU_SOURCE
+            -g -g3 -Wall -std=gnu99 -ggdb -D_GNU_SOURCE
 AM_LDFLAGS = -pthread -lrt
 
 noinst_LTLIBRARIES = libchitcpd.la libsimclist.la
@@ -104,29 +104,37 @@ samples_simple_tester_LDADD = libchitcp.la
 #
 # tests
 #
-CHITCP_BUILT_TESTS = tests/check_libchitcp tests/check_chitcpd tests/check_tcp
-TESTS = $(CHITCP_BUILT_TESTS)
-check_PROGRAMS = $(CHITCP_BUILT_TESTS)
 
-tests_check_libchitcp_SOURCES = \
-                                 tests/check_libchitcp.c \
-                                 tests/check_libchitcp_buffer.c
-tests_check_libchitcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
-tests_check_libchitcp_LDADD = libchitcp.la $(CHECK_LIBS)
+tcptests: tests/test-tcp
 
-tests_check_chitcpd_SOURCES = \
-                               tests/check_chitcpd.c
-tests_check_chitcpd_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
-tests_check_chitcpd_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
-tests_check_chitcpd_DEPENDENCIES = libchitcpd.la
+# use the provided wrapper script to output things properly
+LOG_COMPILER = $(top_srcdir)/build-aux/criterion-tap-test
 
-tests_check_tcp_SOURCES = \
-                               tests/check_tcp.c \
-                               tests/check_tcp_conn_init.c \
-                               tests/check_tcp_data_transfer.c \
-                               tests/check_tcp_conn_term.c \
-                               tests/check_tcp_unreliable_conn.c \
-                               tests/fixtures.c
-tests_check_tcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
-tests_check_tcp_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
-tests_check_tcp_DEPENDENCIES = libchitcpd.la
+# use the TAP log driver
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+            $(top_srcdir)/build-aux/tap-driver.sh
+
+TESTS = tests/test-buffer tests/test-daemon tests/test-tcp
+check_PROGRAMS = $(TESTS)
+
+tests_test_buffer_SOURCES = tests/test_buffer.c
+tests_test_buffer_LDFLAGS = -lcriterion
+tests_test_buffer_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS)
+tests_test_buffer_LDADD = libchitcp.la $(CHECK_LIBS)
+
+tests_test_daemon_SOURCES = tests/test_daemon.c
+tests_test_daemon_LDFLAGS = -lcriterion
+tests_test_daemon_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
+tests_test_daemon_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
+tests_test_daemon_DEPENDENCIES = libchitcpd.la
+
+tests_test_tcp_SOURCES = tests/test_tcp.c \
+						 tests/test_tcp_conn_init.c \
+						 tests/test_tcp_conn_term.c \
+						 tests/test_tcp_data_transfer.c \
+						 tests/test_tcp_unreliable.c \
+                         tests/fixtures.c
+tests_test_tcp_LDFLAGS = -lcriterion
+tests_test_tcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
+tests_test_tcp_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
+tests_test_tcp_DEPENDENCIES = libchitcpd.la

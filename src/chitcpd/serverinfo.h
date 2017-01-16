@@ -42,6 +42,7 @@
 #ifndef SERVERINFO_H_
 #define SERVERINFO_H_
 
+#include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -129,7 +130,6 @@ typedef struct active_chisocket_state
 
 } active_chisocket_state_t;
 
-
 /* State that is specific to passive sockets */
 typedef struct passive_chisocket_state
 {
@@ -187,6 +187,10 @@ typedef struct chisocketentry
     /* Thread that created this entry */
     pthread_t creator_thread;
 
+    /* Queue for withheld packets (simulating unreliable network) */
+    list_t withheld_packets;
+    pthread_mutex_t lock_withheld_packets;
+
     /* For debug communications */
     debug_monitor_t *debug_monitor;
     pthread_mutex_t lock_debug_monitor;
@@ -242,7 +246,7 @@ typedef struct serverinfo
     pthread_cond_t cv_state;
     /* Daemon TCP port and UNIX socket path */
     uint16_t server_port;
-    char* server_socket_path;
+    char server_socket_path[UNIX_PATH_MAX];
 
     /* This is the thread that listens on a UNIX socket
      * for chiTCP requests. */
@@ -271,6 +275,12 @@ typedef struct serverinfo
     uint32_t port_table_size;
     uint16_t ephemeral_port_start;
     chisocketentry_t **port_table;
+
+    double latency;
+
+    /* The libcap file that this server is logging to. */
+    const char *libpcap_file_name;
+    FILE *libpcap_file;
 
 } serverinfo_t;
 
@@ -346,5 +356,7 @@ int chitcpd_find_ephemeral_port(serverinfo_t *si);
 
 chisocketentry_t* chitcpd_lookup_socket(serverinfo_t *si, struct sockaddr *local_addr, struct sockaddr *remote_addr, bool_t exact_match_only);
 
+void tcp_data_init(serverinfo_t *si, chisocketentry_t *entry);
+void tcp_data_free(serverinfo_t *si, chisocketentry_t *entry);
 
 #endif /* SERVERINFO_H_ */

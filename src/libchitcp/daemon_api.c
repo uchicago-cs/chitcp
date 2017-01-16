@@ -128,7 +128,7 @@ int chitcpd_connect()
 
     // Create server address
     serverAddr.sun_family = AF_UNIX;
-    strcpy(serverAddr.sun_path, GET_CHITCPD_SOCK);
+    chitcp_unix_socket(serverAddr.sun_path, UNIX_PATH_MAX);
     len = strlen(serverAddr.sun_path) + sizeof(serverAddr.sun_family);
 
     if (connect(clientSocket, (struct sockaddr *)&serverAddr, len) == -1)

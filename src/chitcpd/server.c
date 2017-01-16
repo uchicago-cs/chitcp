@@ -97,6 +97,17 @@ typedef struct network_thread_args
     serverinfo_t *si;
 } network_thread_args_t;
 
+/* Header for pcap file if necessary. */
+typedef struct pcap_hdr {
+        uint32_t magic_number;   /* magic number */
+        uint16_t version_major;  /* major version number */
+        uint16_t version_minor;  /* minor version number */
+        int32_t  thiszone;       /* GMT to local correction */
+        uint32_t sigfigs;        /* accuracy of timestamps */
+        uint32_t snaplen;        /* max length of captured packets, in octets */
+        uint32_t network;        /* data link type */
+} pcap_hdr_t;
+
 
 /*
  * chitcpd_server_init - Starts the chiTCP daemon
@@ -118,6 +129,8 @@ int chitcpd_server_init(serverinfo_t *si)
     si->port_table_size = DEFAULT_MAX_PORTS;
     si->connection_table_size = DEFAULT_MAX_CONNECTIONS;
     si->ephemeral_port_start = DEFAULT_EPHEMERAL_PORT_START;
+
+    si->latency = 0.0;
 
     /* Initialize chisocket table */
     pthread_mutex_init(&si->lock_chisocket_table, NULL);
@@ -161,6 +174,34 @@ int chitcpd_server_init(serverinfo_t *si)
 
     pthread_mutex_init(&si->lock_state, NULL);
     pthread_cond_init(&si->cv_state, NULL);
+
+    /* Open libpcap file if a name is provided. Will overwrite any data currentlly
+       in said file. */
+    if (si->libpcap_file_name != NULL)
+    {
+        si->libpcap_file = fopen(si->libpcap_file_name, "wb");
+        if (si->libpcap_file == NULL)
+        {
+            perror("Could not open libpcap file for writing");
+            return CHITCP_ENOMEM;
+        }
+
+        chilog(INFO, "Logging to libpcap file %s", si->libpcap_file_name);
+        /* Write the libpcap header */
+        pcap_hdr_t pcap_header;
+        pcap_header.magic_number = 0xa1b23c4d;
+        pcap_header.version_major = 2;
+        pcap_header.version_minor = 4;
+        pcap_header.thiszone = 0;
+        pcap_header.sigfigs = 0;
+        pcap_header.snaplen = 65535;
+        pcap_header.network = 101;
+        fwrite(&pcap_header, sizeof(pcap_hdr_t), 1, si->libpcap_file);
+    }
+    else
+    {
+        si->libpcap_file = NULL;
+    }
 
     si->state = CHITCPD_STATE_READY;
 
@@ -224,13 +265,8 @@ int chitcpd_server_wait(serverinfo_t *si)
 {
     chilog(DEBUG, "Waiting for chiTCP daemon to stop.");
 
-    /* TODO: Retrieve return values */
-    pthread_join(si->server_thread, NULL);
-    pthread_join(si->network_thread, NULL);
-
-    pthread_mutex_lock(&si->lock_state);
-    si->state = CHITCPD_STATE_STOPPED;
-    pthread_cond_broadcast(&si->cv_state);
+    while(si->state != CHITCPD_STATE_STOPPED)
+        pthread_cond_wait(&si->cv_state, &si->lock_state);
     pthread_mutex_unlock(&si->lock_state);
 
     chilog(DEBUG, "chiTCP daemon has fully stopped.");
@@ -257,15 +293,38 @@ int chitcpd_server_stop(serverinfo_t *si)
     pthread_cond_broadcast(&si->cv_state);
     pthread_mutex_unlock(&si->lock_state);
 
-    rc = shutdown(si->network_socket, SHUT_RDWR);
-    if(rc != 0)
-        return CHITCP_ESOCKET;
+    chilog(MINIMAL, "~~~~~~~~~ chiTCP is shutting down ~~~~~~~~~");
+
+    chilog(DEBUG, "chiTCP daemon is now in STOPPING state.");
+
+    chilog(DEBUG, "Stopping server thread...");
 
     rc = shutdown(si->server_socket, SHUT_RDWR);
     if(rc != 0)
         return CHITCP_ESOCKET;
 
-    chilog(DEBUG, "chiTCP daemon is now in STOPPING state.");
+    pthread_join(si->server_thread, NULL);
+
+    chilog(DEBUG, "Stopping network thread...");
+
+    rc = shutdown(si->network_socket, SHUT_RDWR);
+    if(rc != 0)
+        return CHITCP_ESOCKET;
+
+    pthread_join(si->network_thread, NULL);
+
+    if (si->libpcap_file != NULL) {
+        fclose(si->libpcap_file);
+    }
+
+    pthread_mutex_lock(&si->lock_state);
+    si->state = CHITCPD_STATE_STOPPED;
+    pthread_cond_broadcast(&si->cv_state);
+    pthread_mutex_unlock(&si->lock_state);
+
+    chilog(MINIMAL, "=========  chiTCP has shut down   =========");
+    chilog(DEBUG, "chiTCP daemon is now in STOPPED state.");
+
 
     return CHITCP_OK;
 }
@@ -469,7 +528,7 @@ void* chitcpd_server_thread_func(void *args)
             /* Create handler thread to handle this connection */
             ha->client_socket = handler_thread->handler_socket;
             ha->handler_lock = &handler_thread->handler_lock;
-            snprintf(ha->thread_name, 16, "handler-%d", next_thread_id++);
+            snprintf(ha->thread_name, 16, "socket-layer-%d", next_thread_id++);
             if (pthread_create(&handler_thread->thread, NULL, chitcpd_handler_dispatch, ha) != 0)
             {
                 perror("Could not create a worker thread");
@@ -557,6 +616,8 @@ void* chitcpd_server_thread_func(void *args)
     }
 
     list_destroy(&handler_thread_list);
+
+    chilog(DEBUG, "Server thread is exiting.");
 
     pthread_exit(NULL);
 }
@@ -747,6 +808,8 @@ void* chitcpd_server_network_thread_func(void *args)
             pthread_join(connection->thread, NULL);
         }
     }
+
+    chilog(DEBUG, "Network thread is exiting.");
 
     pthread_exit(NULL);
 }

@@ -50,8 +50,11 @@
 #include "chitcp/debug_api.h"
 
 /* Default values */
-#define GET_CHITCPD_SOCK (getenv("CHITCPD_SOCK")? getenv("CHITCPD_SOCK"): "/tmp/chitcpd.socket")
 #define GET_CHITCPD_PORT_STRING (getenv("CHITCPD_PORT")? getenv("CHITCPD_PORT"): "23300")
 #define GET_CHITCPD_PORT (atoi(GET_CHITCPD_PORT_STRING))
+
+/* Returns location of UNIX socket */
+int chitcp_unix_socket(char* buf, int buflen);
+
 
 #endif /* CHITCP_CHITCPD_H_ */

@@ -95,6 +95,12 @@ int circular_buffer_write(circular_buffer_t *buf, uint8_t *data, uint32_t len, b
         while(buf->count == buf->maxsize)
             pthread_cond_wait(&buf->cv_notfull, &buf->lock);
 
+        if(buf->closed)
+        {
+            pthread_mutex_unlock(&buf->lock);
+            return written;
+        }
+
         int towrite;
 
         if (len - written < buf->maxsize - buf->count)
@@ -257,6 +263,7 @@ int circular_buffer_close(circular_buffer_t *buf)
     pthread_mutex_lock(&buf->lock);
     buf->closed = TRUE;
     pthread_cond_broadcast(&buf->cv_notempty);
+    pthread_cond_broadcast(&buf->cv_notfull);
     pthread_mutex_unlock(&buf->lock);
 
     return CHITCP_OK;

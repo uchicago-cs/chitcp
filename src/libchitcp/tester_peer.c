@@ -172,6 +172,7 @@ void* chitcp_tester_peer_thread_func(void *args)
             break;
         case TEST_EVENT_CLOSE:
             prev_state = peer->state;
+
             if(prev_state == STATE_SERVER_READY)
             {
                 chitcp_tester_peer_update_state(peer, STATE_SERVER_CLOSING);
@@ -184,6 +185,7 @@ void* chitcp_tester_peer_thread_func(void *args)
             }
             else
                 new_state = prev_state;
+
             chitcp_tester_peer_close(tester, peer);
             chitcp_tester_peer_update_state(peer, new_state);
             break;

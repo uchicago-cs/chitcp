@@ -88,7 +88,6 @@ enum chitcpd_debug_event {
 /* Methods for turning an enum value into a string suitable for printing in
  * debug print statements or log messages. */
 char *dbg_evt_str(enum chitcpd_debug_event evt);
-char *tcp_str(tcp_state_t state);
 
 
 /* Response codes telling the daemon which action to take at a breakpoint. */

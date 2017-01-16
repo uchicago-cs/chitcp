@@ -107,6 +107,8 @@ int chitcp_addr_is_loopback(struct sockaddr *addr);
  */
 char* chitcp_addr_str(struct sockaddr *addr, char *buf, int len);
 
+void* chitcp_get_addr(struct sockaddr *addr);
+
 int chitcp_addr_is_any(struct sockaddr *addr);
 
 int chitcp_addr_set_any(struct sockaddr *addr);

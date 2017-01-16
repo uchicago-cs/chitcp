@@ -195,7 +195,7 @@ int chitcpd_tcp_start_thread(serverinfo_t *si, chisocketentry_t *entry)
     tcp_thread_args_t *tta = malloc(sizeof(tcp_thread_args_t));
     tta->si = si;
     tta->entry = entry;
-    snprintf (tta->thread_name, 16, "tcp--fd-%d", ptr_to_fd(si, entry));
+    snprintf (tta->thread_name, 16, "tcp-socket-%d", ptr_to_fd(si, entry));
 
     if (pthread_create(&entry->socket_state.active.tcp_thread, NULL, chitcpd_tcp_thread_func, tta) < 0)
     {
@@ -225,9 +225,6 @@ void* chitcpd_tcp_thread_func(void *args)
     active_chisocket_state_t *socket_state = &entry->socket_state.active;
     tcp_data_t *tcp_data = &socket_state->tcp_data;
     int done = FALSE;
-
-    /* Detach thread */
-    pthread_detach(pthread_self());
 
     /* Initialize buffers */
     circular_buffer_init(&tcp_data->send, TCP_BUFFER_SIZE);
@@ -274,7 +271,19 @@ void* chitcpd_tcp_thread_func(void *args)
         while(socket_state->flags.raw == 0)
             pthread_cond_wait(&socket_state->cv_event, &socket_state->lock_event);
 
-        if(socket_state->flags.app_close)
+        if(socket_state->flags.cleanup)
+        {
+            chilog(DEBUG, "Event received: cleanup");
+
+            /* Cleanup can only happen in the CLOSED state */
+            assert(entry->tcp_state == CLOSED);
+
+            chitcpd_dispatch_tcp(si, entry, CLEANUP);
+            chitcpd_free_socket_entry(si, entry);
+
+            done = TRUE;
+        }
+        else if(socket_state->flags.app_close)
         {
             chilog(TRACE, "Event received: app_close");
             socket_state->flags.app_close = 0;
@@ -323,18 +332,6 @@ void* chitcpd_tcp_thread_func(void *args)
                 pthread_mutex_unlock(&socket_state->lock_event);
             }
         }
-        else if(socket_state->flags.cleanup)
-        {
-            chilog(DEBUG, "Event received: cleanup");
-
-            /* Cleanup can only happen in the CLOSED state */
-            assert(entry->tcp_state == CLOSED);
-
-            chitcpd_dispatch_tcp(si, entry, CLEANUP);
-            chitcpd_free_socket_entry(si, entry);
-
-            done = TRUE;
-        }
         else if(socket_state->flags.timeout)
         {
             chilog(TRACE, "Event received: timeout");
@@ -346,5 +343,6 @@ void* chitcpd_tcp_thread_func(void *args)
         chilog(TRACE, "TCP event has been handled");
     }
 
+    chilog(DEBUG, "TCP thread is exiting.");
     return NULL;
 }

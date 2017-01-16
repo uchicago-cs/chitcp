@@ -85,6 +85,8 @@ int chitcpd_tcp_packet_create(chisocketentry_t *entry, tcp_packet_t *packet, con
 /* See serverinfo.h */
 void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_state_t newstate)
 {
+    chilog(MINIMAL, "[S%i] %s -> %s", SOCKET_NO(si, entry), tcp_str(entry->tcp_state), tcp_str(newstate));
+
     pthread_mutex_lock(&entry->lock_tcp_state);
     entry->tcp_state = newstate;
     pthread_cond_broadcast(&entry->cv_tcp_state);
@@ -107,6 +109,8 @@ void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_sta
 /* See serverinfo.h */
 void chitcpd_timeout(serverinfo_t *si, chisocketentry_t *entry)
 {
+    chilog(MINIMAL, "[S%i] TIMEOUT", SOCKET_NO(si, entry));
+
     active_chisocket_state_t *socket_state = &entry->socket_state.active;
     pthread_mutex_lock(&socket_state->lock_event);
     socket_state->flags.timeout = 1;
@@ -150,6 +154,9 @@ int chitcpd_allocate_socket(serverinfo_t *si, int *socket_index)
         entry->actpas_type = SOCKET_UNINITIALIZED;
         entry->tcp_state = CLOSED;
 
+        list_init(&entry->withheld_packets);
+
+        pthread_mutex_init(&entry->lock_withheld_packets, NULL);
         pthread_mutex_init(&entry->lock_tcp_state, NULL);
         pthread_cond_init(&entry->cv_tcp_state, NULL);
 
@@ -180,13 +187,16 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
 
         active_chisocket_state_t *socket_state = &entry->socket_state.active;
 
-        tcp_data_free(&socket_state->tcp_data);
+        tcp_data_free(si, entry);
 
         pthread_mutex_unlock(&socket_state->lock_event);
         pthread_mutex_destroy(&socket_state->lock_event);
         pthread_cond_destroy(&socket_state->cv_event);
     }
 
+    list_destroy(&entry->withheld_packets);
+
+    pthread_mutex_destroy(&entry->lock_withheld_packets);
     pthread_mutex_destroy(&entry->lock_tcp_state);
     pthread_cond_destroy(&entry->cv_tcp_state);
 

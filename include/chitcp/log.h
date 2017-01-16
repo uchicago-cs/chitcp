@@ -51,15 +51,17 @@
 #define CHITCP_LOG_H_
 
 #include "chitcp/packet.h"
+#include <netinet/in.h>
 
 /* Log levels */
 typedef enum {
     CRITICAL = 10,
     ERROR    = 20,
     WARNING  = 30,
-    INFO     = 40,
-    DEBUG    = 50,
-    TRACE    = 60
+    MINIMAL  = 40,
+    INFO     = 50,
+    DEBUG    = 60,
+    TRACE    = 70
 } loglevel_t;
 
 /* Log prefixes when dumping the contents of packets */
@@ -67,6 +69,13 @@ typedef enum {
 #define LOG_OUTBOUND ('>')
 #define LOG_NO_DIRECTION ('|')
 
+/* Log prefixes for MINIMAL logging */
+#define MINLOG_SEND ("SENT")
+#define MINLOG_RCVD ("RCVD")
+#define MINLOG_SEND_DROP ("DROP_SENT")
+#define MINLOG_RCVD_DROP ("DROP_RCVD")
+#define MINLOG_RCVD_DUPLD ("RCVD_DUPLICATE")
+#define MINLOG_RCVD_DELAYED ("RCVD_DELAYED")
 /*
  * chitcp_setloglevel - Sets the logging level
  *
@@ -107,6 +116,10 @@ void chilog(loglevel_t level, char *fmt, ...);
  * Returns: nothing.
  */
 void chilog_tcp(loglevel_t level, tcp_packet_t *packet, char prefix);
+
+
+void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, tcp_packet_t *packet, char *prefix);
+
 
 /*
  * chilog_chitcp - Print the header of a chiTCP packet

@@ -42,6 +42,20 @@
 #ifndef CHITCP_UTILS_H_
 #define CHITCP_UTILS_H_
 
+/*
+ * cksum - Computes a checksum
+ *
+ * Computes a 16-bit checksum that can be used in an IP or TCP header.
+ *
+ * _data: Pointer to data to generate the checksum on
+ *
+ * len: Number of bytes of data
+ *
+ * Returns: 16-bit checksum
+ *
+ */
+uint16_t cksum(const void *_data, int len);
+
 int chitcp_socket_send(int socket, const void *buffer, int length);
 int chitcp_socket_recv(int socket, void *buffer, int length);
 
