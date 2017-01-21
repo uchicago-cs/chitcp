@@ -4,6 +4,7 @@
 *.swp
 /chitcpd
 *.orig
+results.json
 
 # Autotools
 Makefile

@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <criterion/criterion.h>
 #include <criterion/options.h>
+#include <criterion/output.h>
 #include <pthread.h>
 #include <signal.h>
 
@@ -19,6 +20,7 @@ int main(int argc, char *argv[]) {
     }
 
     criterion_options.jobs = 1;
+    criterion_add_output("json", "results.json");
 
     int result = 0;
     if (criterion_handle_args(argc, argv, true))

@@ -62,6 +62,7 @@
 #include "chitcp/types.h"
 #include "chitcp/log.h"
 #include "chitcp/debug_api.h"
+#include "chitcp/chitcpd.h"
 #include "breakpoint.h"
 
 /* Dispatch table */

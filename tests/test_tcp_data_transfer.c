@@ -47,7 +47,6 @@ int receiver(int sockfd, void *args)
     uint8_t buf[size];
 
     rc = chitcp_socket_recv(sockfd, buf, size);
-
     cr_assert(rc == size,
               "Socket did not receive all the bytes (expected %i, got %i)", size, rc);
 
@@ -118,6 +117,10 @@ void half_duplex_client_sends(int nbytes)
     chitcp_tester_client_run_set(tester, sender, &nbytes);
     chitcp_tester_server_run_set(tester, receiver, &nbytes);
 
+    /* Minimizes the possibility of a zero window, which we cannot
+     * deal with in chiTCP */
+    si->latency = 0.05;
+
     tester_connect();
 
     chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
@@ -168,7 +171,7 @@ Test(data_transfer, half_duplex_client_sends_4097bytes, .init = chitcpd_and_test
     half_duplex_client_sends(4097);
 }
 
-Test(data_transfer, half_duplex_client_sends_32768bytes, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 1.0)
+Test(data_transfer, half_duplex_client_sends_32768bytes, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     half_duplex_client_sends(32768);
 }
@@ -178,6 +181,10 @@ void half_duplex_server_sends(int nbytes)
 {
     chitcp_tester_client_run_set(tester, receiver, &nbytes);
     chitcp_tester_server_run_set(tester, sender, &nbytes);
+
+    /* Minimizes the possibility of a zero window, which we cannot
+     * deal with in chiTCP */
+    si->latency = 0.05;
 
     tester_connect();
 
@@ -230,7 +237,7 @@ Test(data_transfer, half_duplex_server_sends_4097bytes, .init = chitcpd_and_test
     half_duplex_server_sends(4097);
 }
 
-Test(data_transfer, half_duplex_server_sends_32768bytes, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 1.0)
+Test(data_transfer, half_duplex_server_sends_32768bytes, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     half_duplex_server_sends(32768);
 }
@@ -240,6 +247,10 @@ void echo(int nbytes)
 {
     chitcp_tester_client_run_set(tester, client_echo, &nbytes);
     chitcp_tester_server_run_set(tester, server_echo, &nbytes);
+
+    /* Minimizes the possibility of a zero window, which we cannot
+     * deal with in chiTCP */
+    si->latency = 0.05;
 
     tester_connect();
 
@@ -292,7 +303,7 @@ Test(data_transfer, echo_4097bytes, .init = chitcpd_and_tester_setup, .fini = ch
     echo(4097);
 }
 
-Test(data_transfer, echo_32768bytes, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 1.0)
+Test(data_transfer, echo_32768bytes, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     echo(32768);
 }

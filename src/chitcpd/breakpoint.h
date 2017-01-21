@@ -43,9 +43,6 @@
 #include "serverinfo.h"
 #include "chitcp/debug_api.h"
 
-/* Macro for getting a sockfd from a pointer in the socket table */
-#define ptr_to_fd(si, entry) ((int) (((char *)entry - (char *)si->chisocket_table) / sizeof(chisocketentry_t)))
-
 
 int chitcpd_init_debug_connection(serverinfo_t *si, int sockfd, int event_flags, int client_socket);
 

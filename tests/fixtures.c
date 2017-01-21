@@ -56,6 +56,11 @@ void chitcpd_and_tester_setup(void)
     cr_assert(rc == 0, "Could not initialize tester.");
 }
 
+void chitcpd_set_latency(double latency)
+{
+    si->latency = latency;
+}
+
 void chitcpd_and_tester_teardown(void)
 {
     int rc;

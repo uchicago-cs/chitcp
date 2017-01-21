@@ -56,5 +56,7 @@
 /* Returns location of UNIX socket */
 int chitcp_unix_socket(char* buf, int buflen);
 
+/* Macro for getting a sockfd from a pointer in the socket table */
+#define ptr_to_fd(si, entry) ((int) (((char *)entry - (char *)si->chisocket_table) / sizeof(chisocketentry_t)))
 
 #endif /* CHITCP_CHITCPD_H_ */

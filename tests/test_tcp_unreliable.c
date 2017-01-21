@@ -18,6 +18,9 @@
 
 int sender(int sockfd, void *args);
 int receiver(int sockfd, void *args);
+int client_echo(int sockfd, void *args);
+int server_echo(int sockfd, void *args);
+
 
 static int drop_count;
 static int dropped;
@@ -59,7 +62,7 @@ enum chitcpd_debug_response drop_packets(int sockfd, enum chitcpd_debug_event ev
 }
 
 /*
- * This makes things much more diffuclt. It will drop packets at random, dictated
+ * This makes things much more difficult. It will drop packets at random, dictated
  * by the drop percentage.
  */
 static float drop_percentage = 0.25; /* Percentage of packets to drop. */
@@ -384,12 +387,46 @@ Test(unreliable_data_transfer, go_back_n, .init = chitcpd_and_tester_setup, .fin
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probablity p=0.25 */
-Test(unreliable_data_transfer, random_drop, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+/* TODO: RTT estimation tests */
+/*
+Test(rtt_estimation, rtt_1_5s, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 15.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 2680;
+
+    chitcp_tester_client_run_set(tester, client_echo, nbytes);
+    chitcp_tester_server_run_set(tester, server_echo, nbytes);
+    si->latency = 0.75; // RTT = 1.5s
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    chitcp_tester_client_close(tester);
+    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    chitcp_tester_server_close(tester);
+
+    chitcp_tester_server_wait_for_state(tester, CLOSED);
+    chitcp_tester_client_wait_for_state(tester, CLOSED);
+
+    tester_done();
+
+    free(nbytes);
+}
+*/
+
+/* This test sends 32KB of data, and drops packets with probability p=0.025 */
+Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
 {
     int *nbytes = malloc(sizeof(int));
 
     *nbytes = 32768;
+    drop_percentage = 0.025;
+    seed = 23300;
 
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
@@ -409,11 +446,228 @@ Test(unreliable_data_transfer, random_drop, .init = chitcpd_and_tester_setup, .f
     free(nbytes);
 }
 
+/* This test sends 32KB of data, and drops packets with probability p=0.025 */
+Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.025;
+    seed = 23310;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.025 */
+Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.025;
+    seed = 12100;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.05 */
+Test(unreliable_data_transfer, random_drop_05_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.05;
+    seed = 23300;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.05 */
+Test(unreliable_data_transfer, random_drop_05_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.05;
+    seed = 23310;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.05 */
+Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.05;
+    seed = 12100;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.10 */
+Test(unreliable_data_transfer, random_drop_10_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.10;
+    seed = 23300;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.10 */
+Test(unreliable_data_transfer, random_drop_10_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.10;
+    seed = 23310;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+/* This test sends 32KB of data, and drops packets with probability p=0.10 */
+Test(unreliable_data_transfer, random_drop_10_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 32768;
+    drop_percentage = 0.10;
+    seed = 12100;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+
+    chitcp_tester_server_set_debug(tester, drop_random_packets,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    tester_done();
+
+    free(nbytes);
+}
+
+
 /* This test results in five packets being sent, but with the first one arriving
  * out of order (after the other four packets). The receiving socket should be
  * able to reassemble these packets without any retransmissions (if out-of-order
  * delivery is not implemented, then all five packets will time out) */
-Test(unreliable_data_transfer, out_of_order_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
+Test(unreliable_out_of_order, out_of_order_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -449,7 +703,7 @@ Test(unreliable_data_transfer, out_of_order_1, .init = chitcpd_and_tester_setup,
 
 /* This test results in four packets being sent, but with two packets out of order.
  * The packets arrive in this order: 3, 1, 4, 2 */
-Test(unreliable_data_transfer, out_of_order_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
+Test(unreliable_out_of_order, out_of_order_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -488,7 +742,7 @@ Test(unreliable_data_transfer, out_of_order_2, .init = chitcpd_and_tester_setup,
  * of order list until packet 5 arrives.
  *
  * The packets arrive in this order: 2, 3, 5, 6, 1, 7, 4 */
-Test(unreliable_data_transfer, out_of_order_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
+Test(unreliable_out_of_order, out_of_order_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -539,7 +793,7 @@ Test(unreliable_data_transfer, out_of_order_3, .init = chitcpd_and_tester_setup,
  * This test should result in no retransmissions. If you open the libpcap file in Wireshark,
  * it should show a "TCP Window Full" packet.
  */
-Test(unreliable_data_transfer, full_window_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
+Test(unreliable_out_of_order, full_window_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 

@@ -46,6 +46,7 @@
 #include "chitcp/addr.h"
 #include "chitcp/debug_api.h"
 #include "chitcp/log.h"
+#include "chitcp/chitcpd.h"
 #include "breakpoint.h"
 
 

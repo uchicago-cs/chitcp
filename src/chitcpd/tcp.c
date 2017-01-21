@@ -91,6 +91,7 @@
 #include "chitcp/log.h"
 #include "chitcp/utils.h"
 #include "chitcp/buffer.h"
+#include "chitcp/chitcpd.h"
 #include "serverinfo.h"
 #include "connection.h"
 #include "tcp.h"

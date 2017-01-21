@@ -105,8 +105,6 @@ samples_simple_tester_LDADD = libchitcp.la
 # tests
 #
 
-tcptests: tests/test-tcp
-
 # use the provided wrapper script to output things properly
 LOG_COMPILER = $(top_srcdir)/build-aux/criterion-tap-test
 
@@ -138,3 +136,13 @@ tests_test_tcp_LDFLAGS = -lcriterion
 tests_test_tcp_CFLAGS = $(AM_CFLAGS) $(CHECK_CFLAGS) -I${srcdir}/src/chitcpd
 tests_test_tcp_LDADD = libchitcp.la libchitcpd.la $(CHECK_LIBS)
 tests_test_tcp_DEPENDENCIES = libchitcpd.la
+
+tcp-tests: tests/test-tcp all
+
+run-tcp-tests: tests/test-tcp
+	tests/test-tcp --verbose
+
+grade: 
+	@test -s results.json || { echo; echo "Test report file (results.json) does not exist."; echo "Cannot generate grade without it. Make sure you run the tests first."; echo; exit 1; }
+	python3 tests/grade.py --report-file results.json
+
