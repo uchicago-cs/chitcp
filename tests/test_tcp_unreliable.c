@@ -476,7 +476,7 @@ Test(rtt_estimation, rtt_3s, .init = chitcpd_and_tester_setup, .fini = chitcpd_a
 
 
 /* This test sends 32KB of data, and drops packets with probability p=0.025 */
-Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -503,7 +503,7 @@ Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_set
 }
 
 /* This test sends 32KB of data, and drops packets with probability p=0.025 */
-Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -530,7 +530,7 @@ Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_set
 }
 
 /* This test sends 32KB of data, and drops packets with probability p=0.025 */
-Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -557,7 +557,7 @@ Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_set
 }
 
 /* This test sends 32KB of data, and drops packets with probability p=0.05 */
-Test(unreliable_data_transfer, random_drop_05_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+Test(unreliable_data_transfer, random_drop_05_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -611,7 +611,7 @@ Test(unreliable_data_transfer, random_drop_05_2, .init = chitcpd_and_tester_setu
 }
 
 /* This test sends 32KB of data, and drops packets with probability p=0.05 */
-Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
+Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 5.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -638,7 +638,7 @@ Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setu
 }
 
 /* This test sends 32KB of data, and drops packets with probability p=0.10 */
-Test(unreliable_data_transfer, random_drop_10_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+Test(unreliable_data_transfer, random_drop_10_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -692,7 +692,7 @@ Test(unreliable_data_transfer, random_drop_10_2, .init = chitcpd_and_tester_setu
 }
 
 /* This test sends 32KB of data, and drops packets with probability p=0.10 */
-Test(unreliable_data_transfer, random_drop_10_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+Test(unreliable_data_transfer, random_drop_10_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
 {
     int *nbytes = malloc(sizeof(int));
 
