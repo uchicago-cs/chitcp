@@ -387,16 +387,43 @@ Test(unreliable_data_transfer, go_back_n, .init = chitcpd_and_tester_setup, .fin
     free(nbytes);
 }
 
-/* TODO: RTT estimation tests */
-/*
-Test(rtt_estimation, rtt_1_5s, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 15.0)
+Test(rtt_estimation, rtt_0_75s, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10)
 {
     int *nbytes = malloc(sizeof(int));
 
-    *nbytes = 2680;
+    *nbytes = 16384;
 
-    chitcp_tester_client_run_set(tester, client_echo, nbytes);
-    chitcp_tester_server_run_set(tester, server_echo, nbytes);
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+    si->latency = 0.375; // RTT = 0.75s
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    chitcp_tester_client_close(tester);
+    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    chitcp_tester_server_close(tester);
+
+    chitcp_tester_server_wait_for_state(tester, CLOSED);
+    chitcp_tester_client_wait_for_state(tester, CLOSED);
+
+    tester_done();
+
+    free(nbytes);
+}
+
+Test(rtt_estimation, rtt_1_5s, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 16384;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
     si->latency = 0.75; // RTT = 1.5s
 
     tester_connect();
@@ -417,7 +444,36 @@ Test(rtt_estimation, rtt_1_5s, .init = chitcpd_and_tester_setup, .fini = chitcpd
 
     free(nbytes);
 }
-*/
+
+Test(rtt_estimation, rtt_3s, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 40.0)
+{
+    int *nbytes = malloc(sizeof(int));
+
+    *nbytes = 16384;
+
+    chitcp_tester_client_run_set(tester, sender, nbytes);
+    chitcp_tester_server_run_set(tester, receiver, nbytes);
+    si->latency = 1.5; // RTT = 3s
+
+    tester_connect();
+
+    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+
+    tester_run();
+
+    chitcp_tester_client_close(tester);
+    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    chitcp_tester_server_close(tester);
+
+    chitcp_tester_server_wait_for_state(tester, CLOSED);
+    chitcp_tester_client_wait_for_state(tester, CLOSED);
+
+    tester_done();
+
+    free(nbytes);
+}
+
 
 /* This test sends 32KB of data, and drops packets with probability p=0.025 */
 Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 10.0)
