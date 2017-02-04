@@ -172,8 +172,14 @@ int chitcpd_server_init(serverinfo_t *si)
         return CHITCP_ENOMEM;
     }
 
+    /* Daemon state lock and condvar */
     pthread_mutex_init(&si->lock_state, NULL);
     pthread_cond_init(&si->cv_state, NULL);
+
+    /* Delivery list (+ lock and condvar) */
+    list_init(&si->delivery_queue);
+    pthread_mutex_init(&si->lock_delivery, NULL);
+    pthread_cond_init(&si->cv_delivery, NULL);
 
     /* Open libpcap file if a name is provided. Will overwrite any data currentlly
        in said file. */
@@ -243,6 +249,18 @@ int chitcpd_server_start(serverinfo_t *si)
      * TODO: Things could go wrong before accept() is called, so it would
      *       be worth adding some synchronization here just in case.
      */
+
+    /* Create arguments to delivery thread */
+    packet_delivery_thread_args_t *pdta = malloc(sizeof(packet_delivery_thread_args_t));
+    pdta->si = si;
+
+    /* Create delivery thread */
+    if (pthread_create(&si->delivery_thread, NULL, chitcpd_packet_delivery_thread_func, pdta) < 0)
+    {
+        perror("Could not create delivery thread");
+        free(pdta);
+        return CHITCP_ETHREAD;
+    }
 
     pthread_mutex_lock(&si->lock_state);
     si->state = CHITCPD_STATE_RUNNING;

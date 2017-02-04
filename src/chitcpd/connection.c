@@ -466,40 +466,69 @@ int chitcpd_send_tcp_packet(serverinfo_t *si, chisocketentry_t *sock, tcp_packet
 
 
 /* Forward declarations */
+void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
 void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
 int chitcpd_pcap_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *peer_addr);
 
-typedef struct packet_delivery_args
+typedef struct packet_delivery_list_entry
 {
-    serverinfo_t *si;
     chisocketentry_t *entry;
     tcp_packet_t* tcp_packet;
+    struct timespec delivery_time;
     char* log_prefix;
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
-} packet_delivery_args_t;
+} packet_delivery_list_entry_t;
 
-void* chitcpd_packet_delivery_func(void *args)
+
+void* chitcpd_packet_delivery_thread_func(void *args)
 {
-    packet_delivery_args_t *pdat;
+    packet_delivery_thread_args_t *pdta;
+    struct timespec now;
+    struct timespec next;
 
     pthread_detach(pthread_self());
 
-    pdat = (packet_delivery_args_t *) args;
+    pdta = (packet_delivery_thread_args_t *) args;
+    serverinfo_t *si = pdta->si;
+    free(args);
 
-    if(pdat->si->latency > 0.0)
+    pthread_mutex_lock(&si->lock_delivery);
+
+    while(! (si->state == CHITCPD_STATE_STOPPING || si->state == CHITCPD_STATE_STOPPING) )
     {
-        struct timespec rqtp;
+        while(!list_empty(&si->delivery_queue))
+        {
+            packet_delivery_list_entry_t *list_entry = list_get_at(&si->delivery_queue, 0);
 
-        rqtp.tv_sec = (int) pdat->si->latency;
-        rqtp.tv_nsec = (pdat->si->latency - rqtp.tv_sec) * 1E9;
+            clock_gettime(CLOCK_REALTIME, &now);
+            if(now.tv_sec > list_entry->delivery_time.tv_sec ||
+               (now.tv_sec == list_entry->delivery_time.tv_sec && now.tv_nsec >= list_entry->delivery_time.tv_nsec))
+            {
+                chitcpd_deliver_packet(si, list_entry->entry, list_entry->tcp_packet,
+                                       &list_entry->local_addr, &list_entry->remote_addr, list_entry->log_prefix);
+                list_extract_at(&si->delivery_queue, 0);
+            }
+            else
+            {
+                next.tv_sec = list_entry->delivery_time.tv_sec;
+                next.tv_nsec = list_entry->delivery_time.tv_nsec;
+                break;
+            }
+        }
 
-        nanosleep(&rqtp, NULL);
+        if(list_empty(&si->delivery_queue))
+        {
+            pthread_cond_wait(&si->cv_delivery, &si->lock_delivery);
+        }
+        else
+        {
+            pthread_cond_timedwait(&si->cv_delivery, &si->lock_delivery, &next);
+        }
+
     }
 
-    chitcpd_deliver_packet(pdat->si, pdat->entry, pdat->tcp_packet, &pdat->local_addr, &pdat->remote_addr, pdat->log_prefix);
 
-    free(args);
 
     return NULL;
 }
@@ -624,33 +653,13 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
          */
         if (r == DBG_RESP_NONE || r == DBG_RESP_DRAW_WITHHELD || r == DBG_RESP_DUPLICATE)
         {
-
             if(si->latency > 0.0)
             {
-                /* Simulate latency by launching a thread that will sleep before
-                 * actually putting the packet in the packet queue */
-
-                pthread_t delivery_thread;
-
-                packet_delivery_args_t *pdat = malloc(sizeof(packet_delivery_args_t));
-
-                pdat->si = si;
-                pdat->entry = entry;
-                pdat->tcp_packet = tcp_packet;
-                pdat->log_prefix = MINLOG_RCVD;
-                memcpy(&pdat->local_addr, &local_addr, sizeof(struct sockaddr_storage));
-                memcpy(&pdat->remote_addr, &remote_addr, sizeof(struct sockaddr_storage));
-
-                if (pthread_create(&delivery_thread, NULL, chitcpd_packet_delivery_func, pdat) < 0)
-                {
-                    perror("Could not create packet delivery thread");
-                    free(pdat);
-                    return CHITCP_ETHREAD;
-                }
+                chitcpd_queue_packet_delivery(si, entry, tcp_packet, &local_addr, &remote_addr, MINLOG_RCVD);
             }
             else
             {
-                /* No need to spawn a thread; just deliver the packet */
+                /* No need to put the packet in the delivery queue; just deliver the packet */
                 chitcpd_deliver_packet(si, entry, tcp_packet, &local_addr, &remote_addr, MINLOG_RCVD);
             }
 
@@ -667,33 +676,12 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
 
                 if(si->latency > 0.0)
                 {
-                    /* Simulate latency by launching a thread that will sleep before
-                     * actually putting the packet in the packet queue */
-
-                    pthread_t delivery_thread_withheld;
-
-                    packet_delivery_args_t *pdat_withheld = malloc(sizeof(packet_delivery_args_t));
-
-                    pdat_withheld->si = si;
-                    pdat_withheld->entry = withheld_entry;
-                    pdat_withheld->tcp_packet = withheld_packet->packet;
-                    pdat_withheld->log_prefix = withheld_packet->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED;
-
-                    memcpy(&pdat_withheld->local_addr, &withheld_entry->local_addr, sizeof(struct sockaddr_storage));
-                    memcpy(&pdat_withheld->remote_addr, &withheld_entry->remote_addr, sizeof(struct sockaddr_storage));
-
-
-                    if (pthread_create(&delivery_thread_withheld, NULL, chitcpd_packet_delivery_func, pdat_withheld) < 0)
-                    {
-                        perror("Could not create packet delivery thread");
-                        free(pdat_withheld);
-                        return CHITCP_ETHREAD;
-                    }
+                    chitcpd_queue_packet_delivery(si, withheld_entry, withheld_packet->packet,
+                                                  &withheld_entry->local_addr, &withheld_entry->remote_addr,
+                                                  withheld_packet->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
                 }
                 else
                 {
-                    /* No need to spawn a thread; just deliver the packet */
-
                     chitcpd_deliver_packet(si, withheld_entry, withheld_packet->packet,
                                            &withheld_entry->local_addr, &withheld_entry->remote_addr,
                                            withheld_packet->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
@@ -708,6 +696,36 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
     return CHITCP_OK;
 }
 
+#define SECOND (1000000000L)
+#define SECOND_F (1000000000.0)
+
+void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
+{
+    packet_delivery_list_entry_t *delivery_entry = malloc(sizeof(packet_delivery_list_entry_t));
+
+    delivery_entry->entry = entry;
+    delivery_entry->tcp_packet = tcp_packet;
+    delivery_entry->log_prefix = log_prefix;
+    memcpy(&delivery_entry->local_addr, local_addr, sizeof(struct sockaddr_storage));
+    memcpy(&delivery_entry->remote_addr, remote_addr, sizeof(struct sockaddr_storage));
+
+    clock_gettime(CLOCK_REALTIME, &delivery_entry->delivery_time);
+
+    long latency_ns = (long) (si->latency * SECOND_F);
+
+    delivery_entry->delivery_time.tv_sec += latency_ns / SECOND;
+    delivery_entry->delivery_time.tv_nsec += latency_ns % SECOND;
+    if (delivery_entry->delivery_time.tv_nsec >= SECOND)
+    {
+        delivery_entry->delivery_time.tv_nsec -= SECOND;
+        delivery_entry->delivery_time.tv_sec += 1;
+    }
+
+    pthread_mutex_lock(&si->lock_delivery);
+    list_append(&si->delivery_queue, delivery_entry);
+    pthread_cond_signal(&si->cv_delivery);
+    pthread_mutex_unlock(&si->lock_delivery);
+}
 
 void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
 {

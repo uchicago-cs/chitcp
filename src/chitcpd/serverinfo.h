@@ -244,6 +244,7 @@ typedef struct serverinfo
     /* Condition variable to signal changes in server state */
     pthread_mutex_t lock_state;
     pthread_cond_t cv_state;
+
     /* Daemon TCP port and UNIX socket path */
     uint16_t server_port;
     char server_socket_path[UNIX_PATH_MAX];
@@ -257,6 +258,14 @@ typedef struct serverinfo
      * incoming chiTCP packets */
     pthread_t network_thread;
     socket_t network_socket;
+
+    /* This is the thread that delivers the packets received
+     * by the network thread (possibly delayed by a latency) */
+    pthread_t delivery_thread;
+    list_t delivery_queue;
+    pthread_mutex_t lock_delivery;
+    pthread_cond_t cv_delivery;
+    double latency;
 
     /* Connections to other chiTCP daemons */
     uint16_t connection_table_size;
@@ -275,8 +284,6 @@ typedef struct serverinfo
     uint32_t port_table_size;
     uint16_t ephemeral_port_start;
     chisocketentry_t **port_table;
-
-    double latency;
 
     /* The libcap file that this server is logging to. */
     const char *libpcap_file_name;

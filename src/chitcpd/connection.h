@@ -53,6 +53,15 @@ typedef struct connection_thread_args
 
 void* chitcpd_connection_thread_func(void *args);
 
+
+typedef struct packet_delivery_thread_args
+{
+    serverinfo_t *si;
+} packet_delivery_thread_args_t;
+
+void* chitcpd_packet_delivery_thread_func(void *args);
+
+
 tcpconnentry_t* chitcpd_get_connection(serverinfo_t *si, struct sockaddr* addr);
 tcpconnentry_t* chitcpd_create_connection(serverinfo_t *si, struct sockaddr* addr);
 tcpconnentry_t* chitcpd_add_connection(serverinfo_t *si, socket_t realsocket_send, socket_t realsocket_recv, struct sockaddr* addr);
