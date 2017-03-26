@@ -315,14 +315,6 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "chiTCP daemon is now in STOPPING state.");
 
-    chilog(DEBUG, "Stopping server thread...");
-
-    rc = shutdown(si->server_socket, SHUT_RDWR);
-    if(rc != 0)
-        return CHITCP_ESOCKET;
-
-    pthread_join(si->server_thread, NULL);
-
     chilog(DEBUG, "Stopping network thread...");
 
     rc = shutdown(si->network_socket, SHUT_RDWR);
@@ -330,6 +322,14 @@ int chitcpd_server_stop(serverinfo_t *si)
         return CHITCP_ESOCKET;
 
     pthread_join(si->network_thread, NULL);
+
+    chilog(DEBUG, "Stopping server thread...");
+
+    rc = shutdown(si->server_socket, SHUT_RDWR);
+    if(rc != 0)
+        return CHITCP_ESOCKET;
+
+    pthread_join(si->server_thread, NULL);
 
     if (si->libpcap_file != NULL) {
         fclose(si->libpcap_file);
