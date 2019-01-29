@@ -44,6 +44,9 @@
 #include <stdlib.h>
 #include "chitcp/socket.h"
 #include "chitcp/types.h"
+#include "chitcp/packet.h"
+
+const char *tcp_str(tcp_state_t state);
 
 const char *tcp_state_names[] =
 {
@@ -86,6 +89,7 @@ uint16_t cksum (const void *_data, int len)
 
       return sum ? sum : 0xffff;
 }
+
 
 int chitcp_socket_send(int socket, const void *buffer, int length)
 {
