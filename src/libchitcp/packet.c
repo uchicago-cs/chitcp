@@ -48,31 +48,31 @@
 #include "chitcp/packet.h"
 #include "chitcp/log.h"
 
-
+/* See packet.h */
 uint16_t chitcp_ntohs(uint16_t netshort)
 {
     return ntohs(netshort);
 }
 
-
+/* See packet.h */
 uint16_t chitcp_htons(uint16_t hostshort)
 {
     return htons(hostshort);
 }
 
-
+/* See packet.h */
 uint32_t chitcp_ntohl(uint32_t netlong)
 {
     return ntohl(netlong);
 }
 
-
+/* See packet.h */
 uint32_t chitcp_htonl(uint32_t hostlong)
 {
     return htonl(hostlong);
 }
 
-
+/* See packet.h */
 int chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len)
 {
     tcphdr_t *header;
@@ -90,8 +90,68 @@ int chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint1
     return packet->length;
 }
 
-
+/* See packet.h */
 void chitcp_tcp_packet_free(tcp_packet_t *packet)
 {
     free((void *) packet->raw);
+}
+
+
+
+/* See packet.h */
+int chitcp_packet_list_destroy(tcp_packet_list_t **pl)
+{
+    tcp_packet_list_t *elt, *tmp;
+
+    DL_FOREACH_SAFE(*pl,elt,tmp)
+    {
+        free(elt->packet);
+        DL_DELETE(*pl,elt);
+        free(elt);
+    }
+
+    return CHITCP_OK;
+}
+
+/* See packet.h */
+int chitcp_packet_list_prepend(tcp_packet_list_t **pl, tcp_packet_t *packet)
+{
+    tcp_packet_list_t *elt = calloc(1, sizeof(tcp_packet_list_t));
+
+    elt->packet = packet;
+
+    DL_PREPEND(*pl, elt);
+
+    return CHITCP_OK;
+}
+
+/* See packet.h */
+int chitcp_packet_list_append(tcp_packet_list_t **pl, tcp_packet_t *packet)
+{
+    tcp_packet_list_t *elt = calloc(1, sizeof(tcp_packet_list_t));
+
+    elt->packet = packet;
+
+    DL_APPEND(*pl, elt);
+
+    return CHITCP_OK;
+}
+
+/* See packet.h */
+int chitcp_packet_list_pop_head(tcp_packet_list_t **pl)
+{
+    DL_DELETE(*pl,*pl);
+
+    return CHITCP_OK;
+}
+
+/* See packet.h */
+int chitcp_packet_list_size(tcp_packet_list_t *pl)
+{
+    int count = 0;
+    tcp_packet_list_t *elt;
+
+    DL_COUNT(pl, elt, count);
+
+    return count;
 }

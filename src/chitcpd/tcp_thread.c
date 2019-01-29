@@ -120,7 +120,7 @@ void chilog_tcp_data(loglevel_t level, tcp_data_t *tcp_data, tcp_state_t state)
     chilog(level, "        SND.WND:  %10i       RCV.WND:  %10i ", tcp_data->SND_WND, tcp_data->RCV_WND);
     chilog(level, "    Send Buffer: %4i / %4i   Recv Buffer: %4i / %4i", snd_buf_size, snd_buf_capacity, rcv_buf_size, rcv_buf_capacity);
     chilog(level, "");
-    chilog(level, "       Pending packets: %4i    Closing? %s", list_size(&tcp_data->pending_packets), tcp_data->closing?"YES":"NO");
+    chilog(level, "       Pending packets: %4i    Closing? %s", chitcp_packet_list_size(tcp_data->pending_packets), tcp_data->closing?"YES":"NO");
     chilog(level, "   ······················································");
     funlockfile(stdout);
 }
@@ -326,7 +326,7 @@ void* chitcpd_tcp_thread_func(void *args)
             chitcpd_dispatch_tcp(si, entry, PACKET_ARRIVAL);
 
             /* If there are more packets to process, set net_recv to 1 again */
-            if(!list_empty(&socket_state->tcp_data.pending_packets))
+            if(socket_state->tcp_data.pending_packets != NULL)
             {
                 pthread_mutex_lock(&socket_state->lock_event);
                 socket_state->flags.net_recv = 1;

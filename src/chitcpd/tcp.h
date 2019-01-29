@@ -40,6 +40,7 @@
  */
 
 #include "chitcp/buffer.h"
+#include "chitcp/packet.h"
 
 #ifndef TCP_H_
 #define TCP_H_
@@ -112,7 +113,7 @@ static inline char *tcp_event_str (tcp_event_type_t evt)
 typedef struct tcp_data
 {
     /* Queue with pending packets received from the network */
-    list_t pending_packets;
+    tcp_packet_list_t *pending_packets;
     pthread_mutex_t lock_pending_packets;
     pthread_cond_t cv_pending_packets;
 

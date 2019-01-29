@@ -558,7 +558,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
 
     pthread_mutex_lock(&active_socket_state->tcp_data.lock_pending_packets);
     chilog(TRACE, "accept() initial packet: enqueueing a copy");
-    list_append(&active_socket_state->tcp_data.pending_packets, pending_connection->initial_packet);
+    chitcp_packet_list_append(&active_socket_state->tcp_data.pending_packets, pending_connection->initial_packet);
     pthread_mutex_unlock(&active_socket_state->tcp_data.lock_pending_packets);
 
     /* Start TCP thread */

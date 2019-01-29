@@ -188,7 +188,7 @@ typedef struct chisocketentry
     pthread_t creator_thread;
 
     /* Queue for withheld packets (simulating unreliable network) */
-    list_t withheld_packets;
+    withheld_tcp_packet_list_t *withheld_packets;
     pthread_mutex_t lock_withheld_packets;
 
     /* For debug communications */

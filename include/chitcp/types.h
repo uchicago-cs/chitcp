@@ -58,6 +58,7 @@ typedef enum {
     CHITCP_EINIT        = -5,  /* Could not initialize a data structure */
     CHITCP_EWOULDBLOCK  = -6,  /* Requested non-blocking mode on an operation that would block */
     CHITCP_EINVAL       = -7,  /* Invalid parameter value */
+    CHITCP_ENOENT       = -8   /* A requested value was not found ("NO ENTity") */
 } chitcp_retcode_t;
 
 

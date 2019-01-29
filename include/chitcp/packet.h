@@ -44,6 +44,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <netinet/in.h>
+#include "utlist.h"
 
 
 /*
@@ -108,15 +109,102 @@ int chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint1
 void chitcp_tcp_packet_free(tcp_packet_t *packet);
 
 
+/*
+ *
+ *  List of TCP Packets
+ *
+ */
+
+/* Lists of TCP packets are manipulated using utlist functions.
+ * We provide a few convenience functions for some common operations */
+
+/* struct for linked list of TCP packets */
+typedef struct tcp_packet_list
+{
+    tcp_packet_t *packet;
+    struct tcp_packet_list *prev;
+    struct tcp_packet_list *next;
+} tcp_packet_list_t;
+
+
+/*
+ * chitcp_packet_list_prepend - Adds a packet to the head of a list of packets
+ *
+ * pl: Pointer to head pointer (this function will update the head pointer so
+ *     that it points to the node that has just been added).
+ *
+ * packet: Pointer to packet to be added.
+ *
+ * Returns: Always returns CHITCP_OK.
+ */
+int chitcp_packet_list_prepend(tcp_packet_list_t **pl, tcp_packet_t *packet);
+
+
+/*
+ * chitcp_packet_list_append - Adds a packet to the tail of a list of packets
+ *
+ * pl: Pointer to head pointer (if the head pointer was initially NULL, this
+ *     function will update it to point to the node that was just added).
+ *
+ * packet: Pointer to packet to be added.
+ *
+ * Returns: Always returns CHITCP_OK.
+ */
+int chitcp_packet_list_append(tcp_packet_list_t **pl, tcp_packet_t *packet);
+
+
+/*
+ * chitcp_packet_list_pop_head - Removes the packet at the head of the list.
+ *
+ * Note: This function doesn't return the packet, it just removes it.
+ *
+ * pl: Pointer to head pointer (head pointer is updated to point to new head,
+ *     or set to NULL if the list is empty after the packet is removed).
+ *
+ * Returns: Always returns CHITCP_OK.
+ */
+int chitcp_packet_list_pop_head(tcp_packet_list_t **pl);
+
+
+/*
+ * chitcp_packet_list_destroy - Frees the list and packets in it.
+ *
+ * pl: Pointer to head pointer
+ *
+ * Returns: Always returns CHITCP_OK.
+ */
+int chitcp_packet_list_destroy(tcp_packet_list_t **pl);
+
+
+/*
+ * chitcp_packet_list_size - Returns the size of the list
+ *
+ * pl: Head pointer
+ *
+ * Returns: Number of packets in the list
+ */
+int chitcp_packet_list_size(tcp_packet_list_t *pl);
+
+
+/*
+ *
+ * Withheld packets
+ *
+ */
+
 /* Struct to contain a withheld TCP packet */
-/* struct to contain a single TCP packet */
 typedef struct withheld_tcp_packet
 {
     tcp_packet_t *packet;
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
     bool duplicate;
+    struct withheld_tcp_packet *prev;
+    struct withheld_tcp_packet *next;
 } withheld_tcp_packet_t;
+
+typedef struct withheld_tcp_packet withheld_tcp_packet_list_t;
+
 
 /*
  *

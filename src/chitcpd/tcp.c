@@ -105,7 +105,7 @@ void tcp_data_init(serverinfo_t *si, chisocketentry_t *entry)
 {
     tcp_data_t *tcp_data = &entry->socket_state.active.tcp_data;
 
-    list_init(&tcp_data->pending_packets);
+    tcp_data->pending_packets = NULL;
     pthread_mutex_init(&tcp_data->lock_pending_packets, NULL);
     pthread_cond_init(&tcp_data->cv_pending_packets, NULL);
 
@@ -119,7 +119,7 @@ void tcp_data_free(serverinfo_t *si, chisocketentry_t *entry)
 
     circular_buffer_free(&tcp_data->send);
     circular_buffer_free(&tcp_data->recv);
-    list_destroy(&tcp_data->pending_packets);
+    chitcp_packet_list_destroy(&tcp_data->pending_packets);
     pthread_mutex_destroy(&tcp_data->lock_pending_packets);
     pthread_cond_destroy(&tcp_data->cv_pending_packets);
 

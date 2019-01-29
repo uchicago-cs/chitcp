@@ -631,7 +631,7 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
             memcpy(&wp->remote_addr, &remote_addr, sizeof(struct sockaddr_storage));
 
             pthread_mutex_lock(&entry->lock_withheld_packets);
-            list_append(&entry->withheld_packets, wp);
+            DL_APPEND(entry->withheld_packets, wp);
             pthread_mutex_unlock(&entry->lock_withheld_packets);
         }
         /* If, besides receiving the current packet, we also want to deliver a withheld packet,
@@ -641,7 +641,9 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
             /* Put a previously withheld packet in the socket's packet queue */
             chilog(TRACE, "chitcpd_recv_tcp_packet: delivering a withheld packet");
             pthread_mutex_lock(&entry->lock_withheld_packets);
-            withheld_packet = (withheld_tcp_packet_t *) list_fetch(&entry->withheld_packets);
+            withheld_packet = entry->withheld_packets;
+            if(withheld_packet)
+                DL_DELETE(entry->withheld_packets, entry->withheld_packets);
             pthread_mutex_unlock(&entry->lock_withheld_packets);
         }
 
@@ -744,7 +746,7 @@ void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packe
 
         /* Put the packet in the socket's packet queue */
         pthread_mutex_lock(&socket_state->tcp_data.lock_pending_packets);
-        list_append(&socket_state->tcp_data.pending_packets, tcp_packet);
+        chitcp_packet_list_append(&socket_state->tcp_data.pending_packets, tcp_packet);
         pthread_mutex_unlock(&socket_state->tcp_data.lock_pending_packets);
 
         /* Notify the socket that there is a pending packet (or packets) */

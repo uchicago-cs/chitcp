@@ -155,7 +155,7 @@ int chitcpd_allocate_socket(serverinfo_t *si, int *socket_index)
         entry->actpas_type = SOCKET_UNINITIALIZED;
         entry->tcp_state = CLOSED;
 
-        list_init(&entry->withheld_packets);
+        entry->withheld_packets = NULL;
 
         pthread_mutex_init(&entry->lock_withheld_packets, NULL);
         pthread_mutex_init(&entry->lock_tcp_state, NULL);
@@ -195,7 +195,13 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
         pthread_cond_destroy(&socket_state->cv_event);
     }
 
-    list_destroy(&entry->withheld_packets);
+    withheld_tcp_packet_list_t *elt, *tmp;
+
+    DL_FOREACH_SAFE(entry->withheld_packets,elt,tmp)
+    {
+        DL_DELETE(entry->withheld_packets,elt);
+        free(elt);
+    }
 
     pthread_mutex_destroy(&entry->lock_withheld_packets);
     pthread_mutex_destroy(&entry->lock_tcp_state);
