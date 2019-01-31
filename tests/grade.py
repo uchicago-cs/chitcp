@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os.path
 import sys
 
 class Assignment(object):
@@ -33,11 +34,21 @@ ASSIGNMENT_2.add_category("unreliable_out_of_order", "Out-of-order delivery", 20
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--tests-file", default="tests/alltests")
+parser.add_argument("--tests-file", default="{}/alltests".format(os.path.dirname(os.path.realpath(__file__))))
 parser.add_argument("--report-file", default="results.json")
 parser.add_argument("--csv", action="store_true")
 
 args = parser.parse_args()
+
+if not os.path.exists(args.tests_file):
+    print("Tests file not found: {}".format(args.tests_file))
+    sys.exit(1)
+
+if not os.path.exists(args.report_file):
+    print("Test results file not found: {}".format(args.report_file))
+    print("Make sure you've run the tests before running this script.")
+    sys.exit(1)
+
 
 tests = {}
 all_test_ids = set()

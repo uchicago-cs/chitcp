@@ -84,3 +84,7 @@ add_executable(test-tcp
         tests/fixtures.c)
 target_include_directories(test-tcp PRIVATE src/chitcpd)
 target_link_libraries(test-tcp ${TEST_LIBS} chitcpd)
+
+add_custom_target(grade
+        DEPENDS results.json
+        COMMAND python3 ../tests/grade.py --report-file results.json)
