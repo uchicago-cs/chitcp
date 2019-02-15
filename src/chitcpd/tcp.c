@@ -161,7 +161,7 @@ int chitcpd_tcp_state_handle_SYN_RCVD(serverinfo_t *si, chisocketentry_t *entry,
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
     /* Your code goes here */
     }
@@ -177,7 +177,7 @@ int chitcpd_tcp_state_handle_SYN_SENT(serverinfo_t *si, chisocketentry_t *entry,
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
     /* Your code goes here */
     }
@@ -205,7 +205,7 @@ int chitcpd_tcp_state_handle_ESTABLISHED(serverinfo_t *si, chisocketentry_t *ent
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
     }
@@ -225,7 +225,7 @@ int chitcpd_tcp_state_handle_FIN_WAIT_1(serverinfo_t *si, chisocketentry_t *entr
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
     }
@@ -246,7 +246,7 @@ int chitcpd_tcp_state_handle_FIN_WAIT_2(serverinfo_t *si, chisocketentry_t *entr
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
     }
@@ -267,7 +267,7 @@ int chitcpd_tcp_state_handle_CLOSE_WAIT(serverinfo_t *si, chisocketentry_t *entr
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
     }
@@ -285,7 +285,7 @@ int chitcpd_tcp_state_handle_CLOSING(serverinfo_t *si, chisocketentry_t *entry, 
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
     }
@@ -310,7 +310,7 @@ int chitcpd_tcp_state_handle_LAST_ACK(serverinfo_t *si, chisocketentry_t *entry,
     {
         /* Your code goes here */
     }
-    else if (event == TIMEOUT)
+    else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
     }

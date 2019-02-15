@@ -41,6 +41,7 @@
 
 #include "chitcp/buffer.h"
 #include "chitcp/packet.h"
+#include "chitcp/multitimer.h"
 
 #ifndef TCP_H_
 #define TCP_H_
@@ -57,10 +58,17 @@ typedef enum
     APPLICATION_RECEIVE = 3,
     APPLICATION_CLOSE   = 4,
     PACKET_ARRIVAL      = 5,
-    TIMEOUT             = 6,
-    CLEANUP             = 7
+    TIMEOUT_RTX         = 6,
+    TIMEOUT_PST         = 7,
+    CLEANUP             = 8
 } tcp_event_type_t;
 
+
+typedef enum
+{
+    RETRANSMISSION      = 0,
+    PERSIST             = 1,
+} tcp_timer_type_t;
 
 /*  Many values in tcp_data have identifiers from RFC 793, as below     */
 
