@@ -72,6 +72,8 @@ typedef void (*mt_callback_func)(multi_timer_t*, single_timer_t*, void*);
 /* Represents a single timer. */
 typedef struct single_timer
 {
+    /* DO NOT REMOVE OR RENAME ANY OF THESE FIELDS */
+
     /* Timer ID */
     uint16_t id;
 
