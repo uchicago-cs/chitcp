@@ -333,13 +333,21 @@ void* chitcpd_tcp_thread_func(void *args)
                 pthread_mutex_unlock(&socket_state->lock_event);
             }
         }
-        else if(socket_state->flags.timeout)
+        else if(socket_state->flags.timeout_rtx)
         {
-            chilog(TRACE, "Event received: timeout");
-            socket_state->flags.timeout = 0;
+            chilog(TRACE, "Event received: timeout_rtx");
+            socket_state->flags.timeout_rtx = 0;
             pthread_mutex_unlock(&socket_state->lock_event);
 
-            chitcpd_dispatch_tcp(si, entry, TIMEOUT);
+            chitcpd_dispatch_tcp(si, entry, TIMEOUT_RTX);
+        }
+        else if(socket_state->flags.timeout_pst)
+        {
+            chilog(TRACE, "Event received: timeout_pst");
+            socket_state->flags.timeout_pst = 0;
+            pthread_mutex_unlock(&socket_state->lock_event);
+
+            chitcpd_dispatch_tcp(si, entry, TIMEOUT_PST);
         }
         chilog(TRACE, "TCP event has been handled");
     }

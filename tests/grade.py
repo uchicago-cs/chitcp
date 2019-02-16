@@ -27,10 +27,11 @@ ASSIGNMENT_1.add_category("conn_init", "3-way handshake", 20)
 ASSIGNMENT_1.add_category("conn_term", "Connection tear-down", 10)
 ASSIGNMENT_1.add_category("data_transfer", "Data transfer", 20)
 
+ASSIGNMENT_2.add_category("multitimer", "Timer API", 10)
 ASSIGNMENT_2.add_category("unreliable_conn_init", "Retransmissions - 3-way handshake", 5)
 ASSIGNMENT_2.add_category("unreliable_conn_term", "Retransmissions - Connection tear-down", 5)    
 ASSIGNMENT_2.add_category("unreliable_data_transfer", "Retransmissions - Data transfer", 20)
-ASSIGNMENT_2.add_category("unreliable_out_of_order", "Out-of-order delivery", 20)
+ASSIGNMENT_2.add_category("unreliable_out_of_order", "Out-of-order delivery", 10)
 
 
 parser = argparse.ArgumentParser()

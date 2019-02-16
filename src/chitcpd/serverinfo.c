@@ -108,13 +108,22 @@ void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_sta
 }
 
 /* See serverinfo.h */
-void chitcpd_timeout(serverinfo_t *si, chisocketentry_t *entry)
+void chitcpd_timeout(serverinfo_t *si, chisocketentry_t *entry, tcp_timer_type_t type)
 {
-    chilog(MINIMAL, "[S%i] TIMEOUT", SOCKET_NO(si, entry));
+
 
     active_chisocket_state_t *socket_state = &entry->socket_state.active;
     pthread_mutex_lock(&socket_state->lock_event);
-    socket_state->flags.timeout = 1;
+    if (type == RETRANSMISSION)
+    {
+        socket_state->flags.timeout_rtx = 1;
+        chilog(MINIMAL, "[S%i] RETRANSMISSION TIMEOUT", SOCKET_NO(si, entry));
+    }
+    else if(type == PERSIST)
+    {
+        socket_state->flags.timeout_pst = 1;
+        chilog(MINIMAL, "[S%i] PERSIST TIMEOUT", SOCKET_NO(si, entry));
+    }
     pthread_cond_broadcast(&socket_state->cv_event);
     pthread_mutex_unlock(&socket_state->lock_event);
 }
