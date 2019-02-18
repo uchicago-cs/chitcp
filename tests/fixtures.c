@@ -11,17 +11,11 @@
 serverinfo_t *si;
 chitcp_tester_t *tester;
 
-void chitcpd_and_tester_setup(void)
+void log_setup(void)
 {
-    int rc;
     char *loglevel;
 
-    si = calloc(1, sizeof(serverinfo_t));
-    si->server_port = chitcp_htons(GET_CHITCPD_PORT);
-    chitcp_unix_socket(si->server_socket_path, UNIX_PATH_MAX);
-
     loglevel = getenv("LOG");
-    si->libpcap_file_name = getenv("PCAP");
 
     if(loglevel)
     {
@@ -44,6 +38,19 @@ void chitcpd_and_tester_setup(void)
     }
     else
         chitcp_setloglevel(CRITICAL);
+}
+
+void chitcpd_and_tester_setup(void)
+{
+    int rc;
+
+    log_setup();
+
+    si = calloc(1, sizeof(serverinfo_t));
+    si->server_port = chitcp_htons(GET_CHITCPD_PORT);
+    chitcp_unix_socket(si->server_socket_path, UNIX_PATH_MAX);
+
+    si->libpcap_file_name = getenv("PCAP");
 
     rc = chitcpd_server_init(si);
     cr_assert(rc == 0, "Could not initialize chiTCP daemon.");

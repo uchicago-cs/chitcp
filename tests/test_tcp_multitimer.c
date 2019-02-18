@@ -5,6 +5,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <criterion/criterion.h>
+#include "fixtures.h"
 
 #define NUM_TIMERS (10)
 #define TIMER_IDX (5)
@@ -36,7 +37,7 @@ void timing_callback(multi_timer_t *mt, single_timer_t *timer, void *args)
 
 
 /* Create a multitimer with a single timer */
-Test(multitimer, create_single_timer)
+Test(multitimer, create_single_timer, .init = log_setup)
 {
     multi_timer_t mt;
     int rc;
@@ -47,7 +48,7 @@ Test(multitimer, create_single_timer)
 
 
 /* Create and then destroy a multitimer with a single timer */
-Test(multitimer, create_and_destroy_single_timer)
+Test(multitimer, create_and_destroy_single_timer, .init = log_setup)
 {
     multi_timer_t mt;
     int rc;
@@ -61,7 +62,7 @@ Test(multitimer, create_and_destroy_single_timer)
 
 
 /* Create a multitimer with multiple timers */
-Test(multitimer, create_multiple_timers)
+Test(multitimer, create_multiple_timers, .init = log_setup)
 {
     multi_timer_t mt;
     int rc;
@@ -72,7 +73,7 @@ Test(multitimer, create_multiple_timers)
 
 
 /* Create and destroy a multitimer with multiple timers */
-Test(multitimer, create_and_destroy_multiple_timers)
+Test(multitimer, create_and_destroy_multiple_timers, .init = log_setup)
 {
     multi_timer_t mt;
     int rc;
@@ -86,7 +87,7 @@ Test(multitimer, create_and_destroy_multiple_timers)
 
 
 /* Tests get_timer_by_id */
-Test(multitimer, get_timer_by_id)
+Test(multitimer, get_timer_by_id, .init = log_setup)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -110,7 +111,7 @@ Test(multitimer, get_timer_by_id)
 
 
 /* Tests that get_timer_by_id works correctly when given an invalid id */
-Test(multitimer, get_timer_by_id_invalid_id)
+Test(multitimer, get_timer_by_id_invalid_id, .init = log_setup)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -131,7 +132,7 @@ Test(multitimer, get_timer_by_id_invalid_id)
 
 
 /* Sets a single timer with a null callback and tests that it fired correctly */
-Test(multitimer, set_single_timer_null_callback)
+Test(multitimer, set_single_timer_null_callback, .init = log_setup)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -155,7 +156,7 @@ Test(multitimer, set_single_timer_null_callback)
 }
 
 /* Sets and cancels a single timer with a null callback */
-Test(multitimer, set_and_cancel_single_timer_null_callback, .timeout = 2.0)
+Test(multitimer, set_and_cancel_single_timer_null_callback, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -185,7 +186,7 @@ Test(multitimer, set_and_cancel_single_timer_null_callback, .timeout = 2.0)
 
 
 /* Try cancelling an inactive timer*/
-Test(multitimer, cancel_inactive_timer, .timeout = 2.0)
+Test(multitimer, cancel_inactive_timer, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -209,7 +210,7 @@ Test(multitimer, cancel_inactive_timer, .timeout = 2.0)
 
 /* Sets a single timer with a null callback and tests that it fired correctly.
  * Then, sets it again.*/
-Test(multitimer, set_and_reset_single_timer_null_callback)
+Test(multitimer, set_and_reset_single_timer_null_callback, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -249,7 +250,7 @@ Test(multitimer, set_and_reset_single_timer_null_callback)
 
 /* Sets all the timers in a multitimer with a null callback and tests
  * that they fired correctly */
-Test(multitimer, set_multiple_timers_null_callback)
+Test(multitimer, set_multiple_timers_null_callback, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -281,7 +282,7 @@ Test(multitimer, set_multiple_timers_null_callback)
 
 /* Sets some (but not all) timers in a multitimer with a null callback
  * and tests that they fired correctly */
-Test(multitimer, set_some_timers_null_callback)
+Test(multitimer, set_some_timers_null_callback, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -331,7 +332,7 @@ void check_timer_timeout(struct timespec* start_time, struct timespec* timeout_t
 
 /* Sets a single timer with the timing callback and tests that it
  * fired at the correct time */
-Test(multitimer, set_single_timer_test_timing)
+Test(multitimer, set_single_timer_test_timing, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -372,7 +373,7 @@ Test(multitimer, set_single_timer_test_timing)
 /* Sets a single timer with the timing callback and tests that it
  * fired at the correct time. Then, sets it again with a different
  * timeout and different parameters to the callback function*/
-Test(multitimer, set_and_reset_single_timer_test_timing)
+Test(multitimer, set_and_reset_single_timer_test_timing, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -435,7 +436,7 @@ Test(multitimer, set_and_reset_single_timer_test_timing)
 
 /* Sets multiple timers with the timing callback and tests that they
  * fired at the correct time */
-Test(multitimer, set_multiple_timer_test_timing)
+Test(multitimer, set_multiple_timer_test_timing, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -482,7 +483,7 @@ Test(multitimer, set_multiple_timer_test_timing)
 /* Sets multiple timers with the timing callback and tests that they
  * fired at the correct time, except one of the timers will be cancelled.
  * In this test, the cancelled timer is not the next one that is set to expire*/
-Test(multitimer, set_multiple_timer_one_cancel_test_timing)
+Test(multitimer, set_multiple_timer_one_cancel_test_timing, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -546,7 +547,7 @@ Test(multitimer, set_multiple_timer_one_cancel_test_timing)
 /* Sets multiple timers with the timing callback and tests that they
  * fired at the correct time, except one of the timers will be cancelled.
  * In this test, the cancelled timer is the next one that is set to expire*/
-Test(multitimer, set_multiple_timer_next_cancel_test_timing)
+Test(multitimer, set_multiple_timer_next_cancel_test_timing, .init = log_setup, .timeout = 2.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -614,7 +615,7 @@ Test(multitimer, set_multiple_timer_next_cancel_test_timing)
 /* Sets multiple timers with the timing callback and cancels
  * all of them before they expire. The timers are cancelled in
  * the order they will expire */
-Test(multitimer, set_multiple_timer_all_cancel_test_timing, .timeout=1.0)
+Test(multitimer, set_multiple_timer_all_cancel_test_timing, .init = log_setup, .timeout = 1.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;
@@ -670,7 +671,7 @@ Test(multitimer, set_multiple_timer_all_cancel_test_timing, .timeout=1.0)
 /* Sets multiple timers with the timing callback and cancels
  * all of them before they expire. The timers are cancelled in
  * reverse order of expiration */
-Test(multitimer, set_multiple_timer_all_reverse_cancel_test_timing, .timeout=1.0)
+Test(multitimer, set_multiple_timer_all_reverse_cancel_test_timing, .init = log_setup, .timeout=1.0)
 {
     multi_timer_t mt;
     single_timer_t *timer;

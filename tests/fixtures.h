@@ -2,11 +2,13 @@
 #define FIXTURES_H_
 
 #include "chitcp/chitcpd.h"
+#include "chitcp/tester.h"
 #include "serverinfo.h"
 
 extern serverinfo_t *si;
 extern chitcp_tester_t *tester;
 
+void log_setup(void);
 void chitcpd_and_tester_setup(void);
 void chitcpd_and_tester_teardown(void);
 void tester_connect(void);
