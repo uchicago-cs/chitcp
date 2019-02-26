@@ -39,10 +39,10 @@ void timing_callback(multi_timer_t *mt, single_timer_t *timer, void *args)
 /* Create a multitimer with a single timer */
 Test(multitimer, create_single_timer, .init = log_setup)
 {
-    multi_timer_t mt;
+    multi_timer_t *mt = calloc(1, sizeof(multi_timer_t));
     int rc;
 
-    rc = mt_init(&mt, 1);
+    rc = mt_init(mt, 1);
     cr_assert_eq(rc, CHITCP_OK);
 }
 
@@ -64,10 +64,10 @@ Test(multitimer, create_and_destroy_single_timer, .init = log_setup)
 /* Create a multitimer with multiple timers */
 Test(multitimer, create_multiple_timers, .init = log_setup)
 {
-    multi_timer_t mt;
+    multi_timer_t *mt = calloc(1, sizeof(multi_timer_t));
     int rc;
 
-    rc = mt_init(&mt, NUM_TIMERS);
+    rc = mt_init(mt, NUM_TIMERS);
     cr_assert_eq(rc, CHITCP_OK);
 }
 
