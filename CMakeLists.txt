@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.5.1)
+project(chitcp C)
+
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR})
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_BUILD_TYPE Debug)
 
-project(chitcp C)
 find_package(Protobuf-c REQUIRED)
 find_package(Criterion REQUIRED)
 
