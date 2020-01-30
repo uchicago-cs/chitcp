@@ -74,6 +74,32 @@ Test(buffer, writepeek_exact)
     circular_buffer_free(&buf);
 }
 
+Test(buffer, writepeekat_exact)
+{
+    int rc;
+    circular_buffer_t buf;
+    uint8_t tmp[26];
+
+    circular_buffer_init(&buf, 8);
+    circular_buffer_set_seq_initial(&buf, 1000);
+
+    rc = circular_buffer_write(&buf, numbers, 6, BUFFER_NONBLOCKING);
+    cr_assert_eq(rc, 6);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1000, 3);
+    cr_assert_eq(rc, 3);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+    cr_assert_eq(memcmp(numbers, tmp, 3), 0);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1003, 3);
+    cr_assert_eq(rc, 3);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+    cr_assert_eq(memcmp(numbers + 3, tmp, 3), 0);
+
+    circular_buffer_free(&buf);
+}
+
 
 Test(buffer, writeread_more)
 {
@@ -109,7 +135,7 @@ Test(buffer, writepeek_more)
     cr_assert_eq(rc, 3);
     cr_assert_eq(circular_buffer_count(&buf), 3);
 
-    rc = circular_buffer_peek(&buf, tmp, 100, BUFFER_NONBLOCKING);
+    rc = circular_buffer_peek_at(&buf, tmp, 1000, 100);
     cr_assert_eq(rc, 3);
     cr_assert_eq(circular_buffer_count(&buf), 3);
     cr_assert_eq(memcmp(numbers, tmp, 3), 0);
@@ -117,6 +143,79 @@ Test(buffer, writepeek_more)
     circular_buffer_free(&buf);
 }
 
+Test(buffer, writepeekat_more)
+{
+    int rc;
+    circular_buffer_t buf;
+    uint8_t tmp[26];
+
+    circular_buffer_init(&buf, 8);
+    circular_buffer_set_seq_initial(&buf, 1000);
+
+    rc = circular_buffer_write(&buf, numbers, 6, BUFFER_NONBLOCKING);
+    cr_assert_eq(rc, 6);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1000, 100);
+    cr_assert_eq(rc, 6);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+    cr_assert_eq(memcmp(numbers, tmp, 6), 0);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1003, 100);
+    cr_assert_eq(rc, 3);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+    cr_assert_eq(memcmp(numbers + 3, tmp, 3), 0);
+
+    circular_buffer_free(&buf);
+}
+
+Test(buffer, writepeekat_inval)
+{
+    int rc;
+    circular_buffer_t buf;
+    uint8_t tmp[26];
+
+    circular_buffer_init(&buf, 8);
+    circular_buffer_set_seq_initial(&buf, 1000);
+
+    rc = circular_buffer_write(&buf, numbers, 6, BUFFER_NONBLOCKING);
+    cr_assert_eq(rc, 6);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 999, 3);
+    cr_assert_eq(rc, CHITCP_EINVAL);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1007, 3);
+    cr_assert_eq(rc, CHITCP_EINVAL);
+    cr_assert_eq(circular_buffer_count(&buf), 6);
+
+    circular_buffer_free(&buf);
+}
+
+Test(buffer, writepeekat_empty)
+{
+    int rc;
+    circular_buffer_t buf;
+    uint8_t tmp[26];
+
+    circular_buffer_init(&buf, 8);
+    circular_buffer_set_seq_initial(&buf, 1000);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 999, 3);
+    cr_assert_eq(rc, CHITCP_EINVAL);
+    cr_assert_eq(circular_buffer_count(&buf), 0);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1000, 0);
+    cr_assert_eq(rc, CHITCP_EINVAL);
+    cr_assert_eq(circular_buffer_count(&buf), 0);
+
+    rc = circular_buffer_peek_at(&buf, tmp, 1000, 3);
+    cr_assert_eq(rc, CHITCP_EINVAL);
+    cr_assert_eq(circular_buffer_count(&buf), 0);
+
+    circular_buffer_free(&buf);
+}
 
 Test(buffer, multi_write)
 {

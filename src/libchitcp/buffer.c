@@ -135,7 +135,7 @@ int circular_buffer_write(circular_buffer_t *buf, uint8_t *data, uint32_t len, b
     return written;
 }
 
-int __circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, bool_t blocking, bool_t peeking)
+int __circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, uint32_t offset, bool_t blocking, bool_t peeking)
 {
     if(len <= 0)
         return CHITCP_EINVAL;
@@ -157,14 +157,14 @@ int __circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, b
     }
 
     int toread;
-    int start = buf->start;
+    int start = (buf->start + offset) % buf->maxsize;
 
     /* We're not going to read more than the number
      * of bytes stored in the buffer */
-    if(len < buf->count)
+    if(len < (buf->count - offset))
         toread = len;
     else
-        toread = buf->count;
+        toread = buf->count - offset;
 
     if(start + toread > buf->maxsize)
     {
@@ -201,12 +201,25 @@ int __circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, b
 
 int circular_buffer_read(circular_buffer_t *buf, uint8_t *dst, uint32_t len, bool_t blocking)
 {
-    return __circular_buffer_read(buf, dst, len, blocking, FALSE);
+    return __circular_buffer_read(buf, dst, len, 0, blocking, FALSE);
 }
 
 int circular_buffer_peek(circular_buffer_t *buf, uint8_t *dst, uint32_t len, bool_t blocking)
 {
-    return __circular_buffer_read(buf, dst, len, blocking, TRUE);
+    return __circular_buffer_read(buf, dst, len, 0, blocking, TRUE);
+}
+
+int circular_buffer_peek_at(circular_buffer_t *buf, uint8_t *dst, uint32_t at, uint32_t len)
+{
+    uint32_t offset;
+
+    /* Check that the sequence number is valid */
+    if (at < buf->seq_start || at >= buf->seq_end)
+        return CHITCP_EINVAL;
+
+    offset = at - buf->seq_start;
+
+    return __circular_buffer_read(buf, dst, len, offset, FALSE, TRUE);
 }
 
 int circular_buffer_first(circular_buffer_t *buf)

@@ -248,6 +248,24 @@ int circular_buffer_peek(circular_buffer_t *buf, uint8_t *dst, uint32_t len, boo
 
 
 /*
+ * circular_buffer_peek_at - Peek data from the buffer starting at a specific
+ *                           sequence number
+ *
+ * Same as circular_buffer_peek, but instead of reading starting at the first
+ * available byte, it instead reads starting at a given sequence number "at", and
+ * up to a maximum of "len" bytes.
+ *
+ * If the function is called with an invalid sequence number "at", it will
+ * return CHITCP_EINVAL
+ *
+ * This is always a non-blocking call: Calling this function on an empty
+ * buffer is treated as providing an invalid sequence number (and also
+ * returns CHITCP_EINVAL)
+ *
+ */
+int circular_buffer_peek_at(circular_buffer_t *buf, uint8_t *dst, uint32_t at, uint32_t len);
+
+/*
  * circular_buffer_write - Write data into the buffer
  *
  * Writes from "dst" into the buffer. The number of bytes
