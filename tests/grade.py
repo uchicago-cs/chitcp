@@ -30,7 +30,8 @@ ASSIGNMENT_1.add_category("data_transfer", "Data transfer", 20)
 ASSIGNMENT_2.add_category("multitimer", "Timer API", 10)
 ASSIGNMENT_2.add_category("unreliable_conn_init", "Retransmissions - 3-way handshake", 5)
 ASSIGNMENT_2.add_category("unreliable_conn_term", "Retransmissions - Connection tear-down", 5)    
-ASSIGNMENT_2.add_category("unreliable_data_transfer", "Retransmissions - Data transfer", 20)
+ASSIGNMENT_2.add_category("unreliable_data_transfer", "Retransmissions - Data transfer", 15)
+ASSIGNMENT_2.add_category("persist", "Persist timer", 5)
 ASSIGNMENT_2.add_category("unreliable_out_of_order", "Out-of-order delivery", 10)
 
 
@@ -38,6 +39,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--tests-file", default="{}/alltests".format(os.path.dirname(os.path.realpath(__file__))))
 parser.add_argument("--report-file", default="results.json")
 parser.add_argument("--csv", action="store_true")
+parser.add_argument("--gradescope", action="store_true")
+parser.add_argument("--gradescope-assignment", type=int)
 
 args = parser.parse_args()
 
@@ -75,9 +78,15 @@ for test_suite in results["test_suites"]:
     
 not_run = all_test_ids.difference(run_test_ids)
 
+if args.gradescope:
+    gradescope_json = {}
+    gradescope_json["tests"] = []
+
 if len(not_run) > 0 and not args.csv:
     print("WARNING: Missing results from {} tests (out of {} possible tests)\n".format(len(not_run), len(all_test_ids)))
 
+    if args.gradescope:
+        gradescope_json["output"] = "We were unable to run some or all of the tests due to an error in your code."
 
 scores = {}
 for assignment in ASSIGNMENTS:
@@ -89,9 +98,9 @@ for assignment in ASSIGNMENTS:
         scores[assignment.name][category] = (num_success, num_failed, num_total)
 
 pscores = []
-for assignment in ASSIGNMENTS:
+for i, assignment in enumerate(ASSIGNMENTS):
     pscore = 0.0
-    if not args.csv:
+    if not args.csv and not args.gradescope:
         print(assignment.name)
         print("=" * 78)
         print("%-40s %-6s / %-10s  %-6s / %-10s" % ("Category", "Passed", "Total", "Score", "Points"))
@@ -107,14 +116,28 @@ for assignment in ASSIGNMENTS:
 
         pscore += cscore
         
-        if not args.csv:
+        if not args.csv and not args.gradescope:
             print("%-40s %-6i / %-10i  %-6.2f / %-10.2f" % (cname, num_success, num_total, cscore, cpoints))
-    if not args.csv:
+        elif args.gradescope:
+            gs_test = {}
+            gs_test["score"] = cscore
+            gs_test["max_score"] = cpoints
+            gs_test["name"] = cname
+
+            gradescope_json["tests"].append(gs_test)
+    if not args.csv and not args.gradescope:
         print("-" * 78)
         print("%59s = %-6.2f / %-10i" % ("TOTAL", pscore, assignment.points))
         print("=" * 78)
         print()
     pscores.append(pscore)
+
+    if args.gradescope and args.gradescope_assignment == i+1:
+        gradescope_json["score"] = pscore
+        gradescope_json["visibility"] = "after_published"
+        gradescope_json["stdout_visibility"] = "after_published"
+
+        print(json.dumps(gradescope_json, indent=2))
 
 if args.csv:
     print(",".join([str(s) for s in pscores]))
