@@ -118,7 +118,7 @@ void half_duplex_client_sends(int nbytes)
     chitcp_tester_server_run_set(tester, receiver, &nbytes);
 
     /* Minimizes the possibility of a zero window, which we cannot
-     * deal with in chiTCP */
+     * deal with in the first part of the project */
     si->latency = 0.05;
 
     tester_connect();

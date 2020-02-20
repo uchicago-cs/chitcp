@@ -23,6 +23,12 @@ unreliable_conn_init::drop_ack
 rtt_estimation::rtt_3s
 rtt_estimation::rtt_1_5s
 rtt_estimation::rtt_0_75s
+persist::slow_receiver_8728bytes
+persist::slow_receiver_8192bytes
+persist::slow_receiver_4632bytes
+persist::slow_receiver_4098bytes
+persist::slow_receiver_4097bytes
+persist::slow_receiver_4096bytes
 multitimer::set_some_timers_null_callback
 multitimer::set_single_timer_test_timing
 multitimer::set_single_timer_null_callback

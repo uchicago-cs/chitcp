@@ -81,6 +81,7 @@ add_executable(test-tcp
         tests/test_tcp_conn_term.c
         tests/test_tcp_data_transfer.c
         tests/test_tcp_unreliable.c
+        tests/test_tcp_persist.c
         tests/test_tcp_multitimer.c
         tests/fixtures.c)
 target_include_directories(test-tcp PRIVATE src/chitcpd)

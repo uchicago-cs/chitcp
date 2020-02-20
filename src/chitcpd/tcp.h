@@ -105,7 +105,8 @@ static char *tcp_event_type_names[] =
     "APPLICATION_RECEIVE",
     "APPLICATION_CLOSE",
     "PACKET_ARRIVAL",
-    "TIMEOUT",
+    "TIMEOUT_RTX",
+    "TIMEOUT_PST",
     "CLEANUP"
 };
 
