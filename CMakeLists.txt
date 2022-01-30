@@ -41,6 +41,8 @@ add_library(chitcpd STATIC
         src/chitcpd/tcp_thread.c
         src/chitcpd/tcp.c
         src/chitcpd/breakpoint.c
+        ${PROTO_SRCS}
+        ${PROTO_HDRS}
         )
 target_include_directories(chitcpd PRIVATE ${PROTOBUF_DIRS})
 target_link_libraries(chitcpd pthread)
