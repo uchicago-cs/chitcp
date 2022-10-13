@@ -29,7 +29,7 @@ add_library(chitcp SHARED ${LIB_SRCS} ${SIMCLIST_SRCS} ${PROTO_SRCS} ${PROTO_HDR
 
 
 target_include_directories(chitcp PRIVATE ${PROTOBUF_DIRS})
-target_link_libraries(chitcp simclist)
+target_link_libraries(chitcp simclist m)
 
 
 # chitcpd
@@ -45,7 +45,7 @@ add_library(chitcpd STATIC
         ${PROTO_HDRS}
         )
 target_include_directories(chitcpd PRIVATE ${PROTOBUF_DIRS})
-target_link_libraries(chitcpd pthread)
+target_link_libraries(chitcpd pthread m)
 
 add_executable(chitcpd-bin src/chitcpd/main.c)
 target_include_directories(chitcpd-bin PRIVATE ${PROTOBUF_DIRS})
