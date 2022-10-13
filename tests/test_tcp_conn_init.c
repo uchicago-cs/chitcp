@@ -72,7 +72,7 @@ static enum chitcpd_debug_response check_vars(int sockfd, enum chitcpd_debug_eve
             cr_assert(curs == SYN_SENT || curs == SYN_RCVD,
                           "%s is not a valid initial state", tcp_str(curs));
             cr_assert(state_info->SND_UNA + 1 == state_info->SND_NXT,
-                          "In state %s, SND.UNA + 1 != SND.NXT (got SND.UNA=%i, SND.NXT=%i",
+                          "In state %s, SND.UNA + 1 != SND.NXT (got SND.UNA=%i, SND.NXT=%i)",
                           tcp_str(curs), state_info->SND_UNA, state_info->SND_NXT);
         }
         else
@@ -84,10 +84,18 @@ static enum chitcpd_debug_response check_vars(int sockfd, enum chitcpd_debug_eve
                  (prevs == SYN_RCVD && curs != ESTABLISHED)  )
                 cr_assert_fail("Invalid transition: %s -> %s", tcp_str(prevs), tcp_str(curs));
 
-            if (prevs == SYN_SENT || prevs == SYN_RCVD)
-                cr_assert(state_info->SND_UNA  == state_info->SND_NXT,
-                              "In state %s, SND.UNA != SND.NXT (got SND.UNA=%i, SND.NXT=%i",
+            if (prevs == SYN_SENT)
+                cr_assert(state_info->SND_UNA == state_info->SND_NXT,
+                              "In state %s, SND.UNA != SND.NXT (got SND.UNA=%i, SND.NXT=%i)",
                               tcp_str(curs), state_info->SND_UNA, state_info->SND_NXT);
+
+            if (prevs == SYN_RCVD)
+                cr_assert(state_info->SND_UNA == state_info->SND_NXT-1,
+                          "In state %s, SND.UNA != SND.NXT-1 (got SND.UNA=%i, SND.NXT=%i). "
+                          "Careful: in the transition from SYN_RCVD to ESTABLISHED, the value of "
+                          "SND.UNA is updated *after* the transition to ESTABLISHED. The tests "
+                          "check for the values at the moment the transition happens.",
+                          tcp_str(curs), state_info->SND_UNA, state_info->SND_NXT);
         }
 
         chitcpd_debug_save_socket_state(state_info);
