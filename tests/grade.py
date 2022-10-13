@@ -115,10 +115,9 @@ for i, assignment in enumerate(ASSIGNMENTS):
             cscore = (float(num_success) / num_total) * cpoints
 
         pscore += cscore
-        
         if not args.csv and not args.gradescope:
             print("%-40s %-6i / %-10i  %-6.2f / %-10.2f" % (cname, num_success, num_total, cscore, cpoints))
-        elif args.gradescope and args.gradescope_assignment == i+1:
+        elif args.gradescope and (args.gradescope_assignment is None or args.gradescope_assignment == i+1):
             gs_test = {}
             gs_test["score"] = cscore
             gs_test["max_score"] = cpoints
@@ -138,6 +137,14 @@ for i, assignment in enumerate(ASSIGNMENTS):
         gradescope_json["stdout_visibility"] = "visible"
 
         print(json.dumps(gradescope_json, indent=2))
+
+if args.gradescope and args.gradescope_assignment is None:
+    gradescope_json["score"] = sum(pscores)
+    gradescope_json["visibility"] = "visible"
+    gradescope_json["stdout_visibility"] = "visible"
+
+    print(json.dumps(gradescope_json, indent=2))
+
 
 if args.csv:
     print(",".join([str(s) for s in pscores]))
