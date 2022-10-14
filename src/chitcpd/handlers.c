@@ -429,7 +429,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__LISTEN)
 
     socket_state->backlog = backlog;
 
-    list_init(&socket_state->pending_connections);
+    socket_state->pending_connections = NULL;
     pthread_mutex_init(&socket_state->lock_pending_connections, NULL);
     pthread_cond_init(&socket_state->cv_pending_connections, NULL);
 
@@ -495,9 +495,10 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     /* Get the next pending connection from the pending connection queue.
      * If there are no pending connections, then block until one arrives */
     pthread_mutex_lock(&socket_state->lock_pending_connections);
-    while(list_empty(&socket_state->pending_connections))
+    while(socket_state->pending_connections == NULL)
         pthread_cond_wait(&socket_state->cv_pending_connections, &socket_state->lock_pending_connections);
-    pending_connection = list_fetch(&socket_state->pending_connections);
+    pending_connection = socket_state->pending_connections;
+    DL_DELETE(socket_state->pending_connections, pending_connection);
     pthread_mutex_unlock(&socket_state->lock_pending_connections);
 
     /* Allocate a socket. This will be an active socket */

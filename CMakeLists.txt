@@ -10,26 +10,21 @@ find_package(Criterion REQUIRED)
 
 file(GLOB LIB_HDRS "include/chitcp/*.h")
 file(GLOB LIB_SRCS "src/libchitcp/*.c" "src/chitcpd-protobuf/protobuf-wrapper.c")
-file(GLOB SIMCLIST_SRCS "src/simclist/*.c")
 set(PROTOBUF_DIRS ${CMAKE_CURRENT_BINARY_DIR}/protobuf
         ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/chitcpd-protobuf
         src/chitcpd-protobuf)
 
-include_directories(include src/simclist)
+include_directories(include)
 add_definitions(-D_GNU_SOURCE)
-
-# Simclist
-add_library(simclist STATIC src/simclist/simclist.c)
-target_include_directories(simclist PRIVATE src/simclist)
 
 
 # libchitcp
 protobuf_generate_c(PROTO_SRCS PROTO_HDRS src/chitcpd-protobuf/chitcpd.proto)
-add_library(chitcp SHARED ${LIB_SRCS} ${SIMCLIST_SRCS} ${PROTO_SRCS} ${PROTO_HDRS})
+add_library(chitcp SHARED ${LIB_SRCS} ${PROTO_SRCS} ${PROTO_HDRS})
 
 
 target_include_directories(chitcp PRIVATE ${PROTOBUF_DIRS})
-target_link_libraries(chitcp simclist m)
+target_link_libraries(chitcp m)
 
 
 # chitcpd

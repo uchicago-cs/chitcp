@@ -47,7 +47,6 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
-#include "simclist.h"
 #include "tcp.h"
 #include "chitcp/types.h"
 #include "chitcp/packet.h"
@@ -92,6 +91,9 @@ typedef struct pending_connection
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
 
+    /* List pointers */
+    struct pending_connection *prev;
+    struct pending_connection *next;
 } pending_connection_t;
 
 
@@ -138,7 +140,7 @@ typedef struct passive_chisocket_state
     int backlog;
 
     /* Queue with pending connections received from the network */
-    list_t pending_connections;
+    pending_connection_t *pending_connections;
     pthread_mutex_t lock_pending_connections;
     pthread_cond_t cv_pending_connections;
 } passive_chisocket_state_t;
@@ -234,6 +236,25 @@ typedef enum
     CHITCPD_STATE_STOPPING                        = 4,  /* Daemon is stopping; all threads must exit */
     CHITCPD_STATE_STOPPED                         = 5,  /* Daemon is stopped; must reinitialize to run again */
 } chitcpd_state_t;
+
+
+/* The packet_delivery_list_entry_t is used to keep track
+ * of packets receoived from the network layer, and which
+ * have to be delivered to the appropriate socket */
+typedef struct packet_delivery_list_entry
+{
+    chisocketentry_t *entry;
+    tcp_packet_t* tcp_packet;
+    struct timespec delivery_time;
+    char* log_prefix;
+    struct sockaddr_storage local_addr;
+    struct sockaddr_storage remote_addr;
+
+    struct packet_delivery_list_entry *prev;
+    struct packet_delivery_list_entry *next;
+} packet_delivery_list_entry_t;
+
+
 /* The serverinfo_t struct is a singleton data structure that contains
  * all the state for the chiTCP daemon. It is often the first parameter
  * in most chitcpd_* functions. */
@@ -263,7 +284,7 @@ typedef struct serverinfo
     /* This is the thread that delivers the packets received
      * by the network thread (possibly delayed by a latency) */
     pthread_t delivery_thread;
-    list_t delivery_queue;
+    packet_delivery_list_entry_t *delivery_queue;
     pthread_mutex_t lock_delivery;
     pthread_cond_t cv_delivery;
     double latency;

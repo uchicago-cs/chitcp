@@ -76,6 +76,7 @@
 #include "chitcp/chitcpd.h"
 #include "chitcp/log.h"
 #include "chitcp/addr.h"
+#include "chitcp/utlist.h"
 
 /* Server thread and network thread functions.
  * We declare them in advance because chitcpd_server_init will
@@ -177,7 +178,7 @@ int chitcpd_server_init(serverinfo_t *si)
     pthread_cond_init(&si->cv_state, NULL);
 
     /* Delivery list (+ lock and condvar) */
-    list_init(&si->delivery_queue);
+    si->delivery_queue = NULL;
     pthread_mutex_init(&si->lock_delivery, NULL);
     pthread_cond_init(&si->cv_delivery, NULL);
 
@@ -428,6 +429,10 @@ typedef struct handler_thread
     pthread_t thread;
     socket_t handler_socket;
     pthread_mutex_t handler_lock;
+
+    /* List pointers */
+    struct handler_thread *prev;
+    struct handler_thread *next;
 } handler_thread_t;
 
 /*
@@ -448,7 +453,7 @@ void* chitcpd_server_thread_func(void *args)
     server_thread_args_t *sta;
     serverinfo_t *si;
     handler_thread_args_t *ha;
-    list_t handler_thread_list;
+    handler_thread_t *handler_thread_list=NULL;
     int rc;
     ChitcpdMsg *req;
     ChitcpdInitArgs *init_args;
@@ -466,8 +471,6 @@ void* chitcpd_server_thread_func(void *args)
     /* Unpack arguments */
     sta = (server_thread_args_t *) args;
     si = sta->si;
-
-    list_init(&handler_thread_list);
 
     struct sockaddr_un client_addr;
 
@@ -565,7 +568,7 @@ void* chitcpd_server_thread_func(void *args)
             resp_outer.resp->error_code = 0;
             rc = chitcpd_send_msg(client_socket, &resp_outer);
 
-            list_append(&handler_thread_list, handler_thread);
+            DL_APPEND(handler_thread_list, handler_thread);
         }
         else if(conntype == CHITCPD_CONNECTION_TYPE__DEBUG_CONNECTION)
         {
@@ -608,7 +611,9 @@ void* chitcpd_server_thread_func(void *args)
         chitcpd_msg__free_unpacked(req, NULL);
     }
 
-    while(!list_empty(&handler_thread_list))
+    /* Free the resources in the active_list. */
+    handler_thread_t *ht, *tmp;
+    DL_FOREACH_SAFE(handler_thread_list, ht, tmp)
     {
         /* For each handler thread we spawned, we close its socket, which
          * will force the thread to exit (and we then join it).
@@ -620,7 +625,6 @@ void* chitcpd_server_thread_func(void *args)
          * TODO: We should simply detach those threads, since they can exit
          * before an orderly shutdown and would be left lingering until
          * we call join here. */
-        handler_thread_t *ht = list_fetch(&handler_thread_list);
 
         /* We don't want to shutdown the handler's socket if an operation is
          * in progress. The handler thread may have read a command, but
@@ -630,10 +634,9 @@ void* chitcpd_server_thread_func(void *args)
         pthread_mutex_unlock(&ht->handler_lock);
         pthread_join(ht->thread, NULL);
         pthread_mutex_destroy(&ht->handler_lock);
+        DL_DELETE(handler_thread_list, ht);
         free(ht);
     }
-
-    list_destroy(&handler_thread_list);
 
     chilog(DEBUG, "Server thread is exiting.");
 

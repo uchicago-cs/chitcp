@@ -187,7 +187,14 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
         chilog(TRACE, "Freeing entry for passive socket %i", SOCKET_NO(si, entry));
 
         passive_chisocket_state_t *socket_state = &entry->socket_state.passive;
-        list_destroy(&socket_state->pending_connections);
+
+        pending_connection_t *item, *tmp;
+        DL_FOREACH_SAFE(socket_state->pending_connections, item, tmp)
+        {
+            DL_DELETE(socket_state->pending_connections, item);
+            free(item);
+        }
+
         pthread_mutex_destroy(&socket_state->lock_pending_connections);
         pthread_cond_destroy(&socket_state->cv_pending_connections);
     }

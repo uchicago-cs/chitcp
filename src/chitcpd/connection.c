@@ -55,6 +55,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <errno.h>
 #include "handlers.h"
 #include "connection.h"
 #include "chitcp/chitcpd.h"
@@ -470,16 +471,6 @@ void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tc
 void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
 int chitcpd_pcap_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *peer_addr);
 
-typedef struct packet_delivery_list_entry
-{
-    chisocketentry_t *entry;
-    tcp_packet_t* tcp_packet;
-    struct timespec delivery_time;
-    char* log_prefix;
-    struct sockaddr_storage local_addr;
-    struct sockaddr_storage remote_addr;
-} packet_delivery_list_entry_t;
-
 
 void* chitcpd_packet_delivery_thread_func(void *args)
 {
@@ -497,9 +488,9 @@ void* chitcpd_packet_delivery_thread_func(void *args)
 
     while(! (si->state == CHITCPD_STATE_STOPPING || si->state == CHITCPD_STATE_STOPPING) )
     {
-        while(!list_empty(&si->delivery_queue))
+        while(si->delivery_queue)
         {
-            packet_delivery_list_entry_t *list_entry = list_get_at(&si->delivery_queue, 0);
+            packet_delivery_list_entry_t *list_entry = si->delivery_queue;
 
             clock_gettime(CLOCK_REALTIME, &now);
             if(now.tv_sec > list_entry->delivery_time.tv_sec ||
@@ -507,7 +498,7 @@ void* chitcpd_packet_delivery_thread_func(void *args)
             {
                 chitcpd_deliver_packet(si, list_entry->entry, list_entry->tcp_packet,
                                        &list_entry->local_addr, &list_entry->remote_addr, list_entry->log_prefix);
-                list_extract_at(&si->delivery_queue, 0);
+                DL_DELETE(si->delivery_queue, list_entry);
             }
             else
             {
@@ -517,7 +508,7 @@ void* chitcpd_packet_delivery_thread_func(void *args)
             }
         }
 
-        if(list_empty(&si->delivery_queue))
+        if(si->delivery_queue == NULL)
         {
             pthread_cond_wait(&si->cv_delivery, &si->lock_delivery);
         }
@@ -527,8 +518,6 @@ void* chitcpd_packet_delivery_thread_func(void *args)
         }
 
     }
-
-
 
     return NULL;
 }
@@ -724,7 +713,7 @@ void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tc
     }
 
     pthread_mutex_lock(&si->lock_delivery);
-    list_append(&si->delivery_queue, delivery_entry);
+    DL_APPEND(si->delivery_queue, delivery_entry);
     pthread_cond_signal(&si->cv_delivery);
     pthread_mutex_unlock(&si->lock_delivery);
 }
@@ -780,7 +769,7 @@ void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packe
 
         /* Add to queue */
         pthread_mutex_lock(&socket_state->lock_pending_connections);
-        list_append(&socket_state->pending_connections, pending_connection);
+        DL_APPEND(socket_state->pending_connections, pending_connection);
         pthread_cond_broadcast(&socket_state->cv_pending_connections);
         pthread_mutex_unlock(&socket_state->lock_pending_connections);
     }

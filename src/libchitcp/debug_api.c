@@ -41,11 +41,11 @@
 #include "daemon_api.h"
 #include "chitcp/types.h"
 #include "chitcp/socket.h"
+#include "chitcp/utlist.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
-#include "simclist.h"
 
 /* Used by active_threads to retain socket state information between calls
  * to a debug_event_handler. (See active_thread below.) */
@@ -67,6 +67,10 @@ struct active_thread_args
     pthread_mutex_t lock;
     pthread_cond_t cv;
     pthread_t tid;
+
+    /* List pointers */
+    struct active_thread_args *prev;
+    struct active_thread_args *next;
 };
 
 /* For more descriptive log messages. */
@@ -216,14 +220,6 @@ int chitcpd_debug_save_socket_state(debug_socket_state_t *state_info)
     return pthread_setspecific(state_key, state_info);
 }
 
-/* Matches elements from the list of active threads by their sockfd */
-static int active_list_seeker(const void *el, const void *id)
-{
-    if (((struct active_thread_args *)el)->sockfd == *(int *)id)
-        return 1;
-    return 0;
-}
-
 /* Declarations for use in debug_thread() below */
 static enum chitcpd_debug_response send_and_get_from_active(struct active_thread_args *item, enum chitcpd_debug_event event_flag);
 static void *active_thread(void *_args);
@@ -246,9 +242,7 @@ static void *debug_thread(void *_args)
     resp_outer.code = CHITCPD_MSG_CODE__RESP;
     resp_outer.resp = &resp_inner;
 
-    list_t active_list;
-    list_init(&active_list);
-    list_attributes_seeker(&active_list, active_list_seeker);
+    struct active_thread_args *active_list = NULL;
 
     while (1)
     {
@@ -314,7 +308,7 @@ static void *debug_thread(void *_args)
                     break;
                 }
 
-                list_append(&active_list, new_args);
+                DL_APPEND(active_list, new_args);
             }
         }
 
@@ -327,14 +321,16 @@ static void *debug_thread(void *_args)
         else if (is_active)
         {
             /* We must pass this event on to the associated active_thread. */
-            struct active_thread_args *item = (struct active_thread_args *)list_seek(&active_list, &sockfd);
+            struct active_thread_args *item;
+            DL_SEARCH_SCALAR(active_list, item, sockfd, sockfd);
+
             if (item != NULL)
             {
                 resp_inner.ret = send_and_get_from_active(item, event_flag);
                 if (resp_inner.ret == DBG_RESP_STOP)
                 {
                     /* The other thread is terminating */
-                    list_delete(&active_list, item);
+                    DL_DELETE(active_list, item);
                     pthread_join(item->tid, NULL);
                     pthread_mutex_destroy(&item->lock);
                     pthread_cond_destroy(&item->cv);
@@ -359,17 +355,18 @@ static void *debug_thread(void *_args)
     }
 
     /* Free the resources in the active_list. */
-    while (list_size(&active_list) > 0)
+    struct active_thread_args *item, *tmp;
+    DL_FOREACH_SAFE(active_list, item, tmp)
     {
-        struct active_thread_args *item = (struct active_thread_args *) list_extract_at(&active_list, 0);
         /* Ask the corresponding thread to stop. */
         send_and_get_from_active(item, DBG_EVT_KILL);
         pthread_join(item->tid, NULL);
         pthread_mutex_destroy(&item->lock);
         pthread_cond_destroy(&item->cv);
+        DL_DELETE(active_list, item);
         free(item);
     }
-    list_destroy(&active_list);
+
     close(daemon_fd);
 
     return NULL;
