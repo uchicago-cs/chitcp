@@ -389,12 +389,11 @@ Test(multitimer, set_and_reset_single_timer_test_timing, .init = log_setup, .tim
         args[i].idx = i;
     }
 
-    clock_gettime(CLOCK_REALTIME, &start_time);
-
     rc = mt_init(&mt, NUM_TIMERS);
     cr_assert_eq(rc, CHITCP_OK);
 
     /* Set the timer */
+    clock_gettime(CLOCK_REALTIME, &start_time);
     rc = mt_set_timer(&mt, TIMER_IDX, 50*MILLISECOND, timing_callback, &args[TIMER_IDX]);
     cr_assert_eq(rc, CHITCP_OK);
 
