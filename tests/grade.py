@@ -18,21 +18,21 @@ class Assignment(object):
         self.lcategories.append(cid)
     
 
-ASSIGNMENT_1 = Assignment("Assignment 1", 50)    
-ASSIGNMENT_2 = Assignment("Assignment 2", 50)    
+ASSIGNMENT_1 = Assignment("Assignment 1", 100)
+ASSIGNMENT_2 = Assignment("Assignment 2", 100)
 
 ASSIGNMENTS = [ASSIGNMENT_1, ASSIGNMENT_2]
 
-ASSIGNMENT_1.add_category("conn_init", "3-way handshake", 20)
-ASSIGNMENT_1.add_category("conn_term", "Connection tear-down", 10)
-ASSIGNMENT_1.add_category("data_transfer", "Data transfer", 20)
+ASSIGNMENT_1.add_category("conn_init", "3-way handshake", 40)
+ASSIGNMENT_1.add_category("conn_term", "Connection tear-down", 20)
+ASSIGNMENT_1.add_category("data_transfer", "Data transfer", 40)
 
-ASSIGNMENT_2.add_category("multitimer", "Timer API", 10)
-ASSIGNMENT_2.add_category("unreliable_conn_init", "Retransmissions - 3-way handshake", 5)
-ASSIGNMENT_2.add_category("unreliable_conn_term", "Retransmissions - Connection tear-down", 5)    
-ASSIGNMENT_2.add_category("unreliable_data_transfer", "Retransmissions - Data transfer", 15)
-ASSIGNMENT_2.add_category("persist", "Persist timer", 5)
-ASSIGNMENT_2.add_category("unreliable_out_of_order", "Out-of-order delivery", 10)
+ASSIGNMENT_2.add_category("multitimer", "Timer API", 20)
+ASSIGNMENT_2.add_category("unreliable_conn_init", "Retransmissions - 3-way handshake", 10)
+ASSIGNMENT_2.add_category("unreliable_conn_term", "Retransmissions - Connection tear-down", 10)
+ASSIGNMENT_2.add_category("unreliable_data_transfer", "Retransmissions - Data transfer", 30)
+ASSIGNMENT_2.add_category("persist", "Persist timer", 10)
+ASSIGNMENT_2.add_category("unreliable_out_of_order", "Out-of-order delivery", 20)
 
 
 parser = argparse.ArgumentParser()
