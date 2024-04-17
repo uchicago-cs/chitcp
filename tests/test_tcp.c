@@ -24,7 +24,25 @@ int main(int argc, char *argv[]) {
 
     int result = 0;
     if (criterion_handle_args(argc, argv, true))
+    {
+        if (criterion_options.debug != CR_DBG_NONE)
+        {
+            /* When running in debug mode, disable all timeouts.
+               Otherwise, tests will time out while debugging.
+               (apparently using criterion_options.timeout has
+               no effect, because that's only meant to affect
+               tests with no specified time out, so we have to
+               iterate over every test and change its timeout. */
+            FOREACH_SET(struct criterion_suite_set *s, tests->suites)
+            {
+                FOREACH_SET(struct criterion_test *test, s->tests)
+                {
+                    test->data->timeout = 0.0;
+                }
+            }
+        }
         result = !criterion_run_all_tests(tests);
+    }
 
     criterion_finalize(tests);
     return result;
