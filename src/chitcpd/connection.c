@@ -101,7 +101,7 @@ void* chitcpd_connection_thread_func(void *args)
     do
     {
         /* Receive a chiTCP header */
-        nbytes = recv(connection->realsocket_recv, &chitcp_header, sizeof(chitcphdr_t), 0);
+        nbytes = recv(connection->realsocket_recv, &chitcp_header, sizeof(chitcphdr_t), MSG_WAITALL);
 
         if (nbytes == 0)
         {
@@ -130,7 +130,7 @@ void* chitcpd_connection_thread_func(void *args)
                 /* This means the header will be following by a TCP packet */
 
                 /* Receive the packet */
-                nbytes = recv(connection->realsocket_recv, buf, payload_len, 0);
+                nbytes = recv(connection->realsocket_recv, buf, payload_len, MSG_WAITALL);
                 if (nbytes == 0)
                 {
                     // Server closed the connection
