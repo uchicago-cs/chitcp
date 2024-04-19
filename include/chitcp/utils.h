@@ -42,6 +42,8 @@
 #ifndef CHITCP_UTILS_H_
 #define CHITCP_UTILS_H_
 
+#include <pthread.h>
+
 /*
  * cksum - Computes a checksum
  *
@@ -58,5 +60,5 @@ uint16_t cksum(const void *_data, int len);
 
 int chitcp_socket_send(int socket, const void *buffer, int length);
 int chitcp_socket_recv(int socket, void *buffer, int length);
-
+void set_thread_name(pthread_t thread, const char *name);
 #endif /* CHITCP_UTILS_H_ */

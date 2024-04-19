@@ -85,7 +85,7 @@ void* chitcpd_connection_thread_func(void *args)
     bool_t done = FALSE;
     serverinfo_t *si = cta->si;
     tcpconnentry_t *connection = cta->connection;
-    pthread_setname_np(pthread_self(), cta->thread_name);
+    set_thread_name(pthread_self(), cta->thread_name);
     free(args);
     struct sockaddr_storage local_addr, peer_addr;
     chitcphdr_t chitcp_header;
@@ -101,7 +101,7 @@ void* chitcpd_connection_thread_func(void *args)
     do
     {
         /* Receive a chiTCP header */
-        nbytes = recv(connection->realsocket_recv, &chitcp_header, sizeof(chitcphdr_t), MSG_WAITALL);
+        nbytes = recv(connection->realsocket_recv, &chitcp_header, sizeof(chitcphdr_t), 0);
 
         if (nbytes == 0)
         {
@@ -130,7 +130,7 @@ void* chitcpd_connection_thread_func(void *args)
                 /* This means the header will be following by a TCP packet */
 
                 /* Receive the packet */
-                nbytes = recv(connection->realsocket_recv, buf, payload_len, MSG_WAITALL);
+                nbytes = recv(connection->realsocket_recv, buf, payload_len, 0);
                 if (nbytes == 0)
                 {
                     // Server closed the connection

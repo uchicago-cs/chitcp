@@ -73,6 +73,7 @@
 #include "handlers.h"
 #include "breakpoint.h"
 #include "protobuf-wrapper.h"
+#include "chitcp/utils.h"
 #include "chitcp/chitcpd.h"
 #include "chitcp/log.h"
 #include "chitcp/addr.h"
@@ -466,7 +467,7 @@ void* chitcpd_server_thread_func(void *args)
 
     /* For naming the handler threads we create (for debugging/logging) */
     int next_thread_id = 0;
-    pthread_setname_np(pthread_self(), "unix_server");
+    set_thread_name(pthread_self(), "unix_server");
 
     /* Unpack arguments */
     sta = (server_thread_args_t *) args;
@@ -736,7 +737,7 @@ void* chitcpd_server_network_thread_func(void *args)
     tcpconnentry_t* connection;
     char addr_str[100];
 
-    pthread_setname_np(pthread_self(), "network_server");
+    set_thread_name(pthread_self(), "network_server");
 
     /* Unpack arguments */
     nta = (network_thread_args_t *) args;

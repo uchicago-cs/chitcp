@@ -49,6 +49,7 @@
 #include "chitcp/addr.h"
 #include "chitcp/log.h"
 #include "chitcp/packet.h"
+#include "chitcp/utils.h"
 #include "protobuf-wrapper.h"
 #include "connection.h"
 #include "tcp_thread.h"
@@ -135,7 +136,7 @@ void* chitcpd_handler_dispatch(void *args)
     serverinfo_t *si = ha->si;
     socket_t client_socket = ha->client_socket;
     pthread_mutex_t *handler_lock = ha->handler_lock;
-    pthread_setname_np(pthread_self(), ha->thread_name);
+    set_thread_name(pthread_self(), ha->thread_name);
     ChitcpdMsg *req;
     ChitcpdMsg resp_outer = CHITCPD_MSG__INIT;
     ChitcpdResp resp_inner = CHITCPD_RESP__INIT;
