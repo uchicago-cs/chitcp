@@ -91,7 +91,7 @@ int chitcpd_recv_msg(int sockfd, ChitcpdMsg **msg_p)
     uint8_t *packed;
 
     /* Get the message length */
-    nbytes = recv(sockfd, &size, sizeof(size_t), 0);
+    nbytes = recv(sockfd, &size, sizeof(size_t), MSG_WAITALL);
     if (nbytes == 0)
     {
         /* Peer disconnected */
@@ -113,7 +113,7 @@ int chitcpd_recv_msg(int sockfd, ChitcpdMsg **msg_p)
     }
 
     /* Get the message itself */
-    nbytes = recv(sockfd, packed, size, 0);
+    nbytes = recv(sockfd, packed, size, MSG_WAITALL);
     if (nbytes == 0)
     {
         /* Peer disconnected */
