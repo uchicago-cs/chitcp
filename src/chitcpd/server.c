@@ -319,7 +319,7 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "Stopping network thread...");
 
-    rc = shutdown(si->network_socket, SHUT_RDWR);
+    rc = close(si->network_socket);
     if(rc != 0)
         return CHITCP_ESOCKET;
 
@@ -327,7 +327,7 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "Stopping server thread...");
 
-    rc = shutdown(si->server_socket, SHUT_RDWR);
+    rc = close(si->server_socket);
     if(rc != 0)
         return CHITCP_ESOCKET;
 
