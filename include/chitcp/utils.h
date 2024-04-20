@@ -43,6 +43,7 @@
 #define CHITCP_UTILS_H_
 
 #include <pthread.h>
+#include <stdint.h>
 
 /*
  * cksum - Computes a checksum

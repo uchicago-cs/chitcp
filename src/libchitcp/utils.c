@@ -174,6 +174,6 @@ void set_thread_name(pthread_t thread, const char *name)
         pthread_setname_np(name);
     }
     #else
-    pthread_setname_np(name);
+    pthread_setname_np(thread, name);
     #endif
 }

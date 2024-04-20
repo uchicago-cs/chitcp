@@ -319,7 +319,11 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "Stopping network thread...");
 
+#ifdef __APPLE__
     rc = close(si->network_socket);
+#else
+    rc = shutdown(si->network_socket, SHUT_RDWR);
+#endif
     if(rc != 0)
         return CHITCP_ESOCKET;
 
@@ -327,7 +331,11 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "Stopping server thread...");
 
+#ifdef __APPLE__
     rc = close(si->server_socket);
+#else
+    rc = shutdown(si->server_socket, SHUT_RDWR);
+#endif
     if(rc != 0)
         return CHITCP_ESOCKET;
 
