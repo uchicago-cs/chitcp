@@ -42,6 +42,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "chitcp/utils.h"
 #include "chitcp/socket.h"
 #include "chitcp/types.h"
 #include "chitcp/packet.h"
@@ -166,3 +167,13 @@ int chitcp_unix_socket(char* buf, int buflen)
     return CHITCP_OK;
 }
 
+void set_thread_name(pthread_t thread, const char *name)
+{
+    #ifdef __APPLE__
+    if (pthread_self() == thread) {
+        pthread_setname_np(name);
+    }
+    #else
+    pthread_setname_np(thread, name);
+    #endif
+}

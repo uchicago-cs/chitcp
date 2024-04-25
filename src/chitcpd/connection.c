@@ -85,7 +85,7 @@ void* chitcpd_connection_thread_func(void *args)
     bool_t done = FALSE;
     serverinfo_t *si = cta->si;
     tcpconnentry_t *connection = cta->connection;
-    pthread_setname_np(pthread_self(), cta->thread_name);
+    set_thread_name(pthread_self(), cta->thread_name);
     free(args);
     struct sockaddr_storage local_addr, peer_addr;
     chitcphdr_t chitcp_header;

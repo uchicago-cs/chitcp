@@ -73,6 +73,7 @@
 #include "handlers.h"
 #include "breakpoint.h"
 #include "protobuf-wrapper.h"
+#include "chitcp/utils.h"
 #include "chitcp/chitcpd.h"
 #include "chitcp/log.h"
 #include "chitcp/addr.h"
@@ -318,7 +319,11 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "Stopping network thread...");
 
+#ifdef __APPLE__
+    rc = close(si->network_socket);
+#else
     rc = shutdown(si->network_socket, SHUT_RDWR);
+#endif
     if(rc != 0)
         return CHITCP_ESOCKET;
 
@@ -326,7 +331,11 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     chilog(DEBUG, "Stopping server thread...");
 
+#ifdef __APPLE__
+    rc = close(si->server_socket);
+#else
     rc = shutdown(si->server_socket, SHUT_RDWR);
+#endif
     if(rc != 0)
         return CHITCP_ESOCKET;
 
@@ -466,7 +475,7 @@ void* chitcpd_server_thread_func(void *args)
 
     /* For naming the handler threads we create (for debugging/logging) */
     int next_thread_id = 0;
-    pthread_setname_np(pthread_self(), "unix_server");
+    set_thread_name(pthread_self(), "unix_server");
 
     /* Unpack arguments */
     sta = (server_thread_args_t *) args;
@@ -736,7 +745,7 @@ void* chitcpd_server_network_thread_func(void *args)
     tcpconnentry_t* connection;
     char addr_str[100];
 
-    pthread_setname_np(pthread_self(), "network_server");
+    set_thread_name(pthread_self(), "network_server");
 
     /* Unpack arguments */
     nta = (network_thread_args_t *) args;

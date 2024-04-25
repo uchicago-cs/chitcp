@@ -323,10 +323,10 @@ void check_timer_timeout(struct timespec* start_time, struct timespec* timeout_t
 
     actual_timeout = timespec_diff.tv_sec * SECOND + timespec_diff.tv_nsec;
 
-    abs_diff = abs(actual_timeout - expected_timeout);
+    abs_diff = actual_timeout - expected_timeout;
     rel_diff = ((double) abs_diff) / expected_timeout;
 
-    cr_assert_leq(rel_diff, TIMER_DIFF_TOLERANCE, "Expected timeout to be %lu, got %lu (rel diff %f > %f)",
+    cr_assert_leq(rel_diff, TIMER_DIFF_TOLERANCE, "Expected timeout to be %llu, got %llu (rel diff %f > %f)",
                                                   expected_timeout, actual_timeout, rel_diff, TIMER_DIFF_TOLERANCE);
 }
 
@@ -524,7 +524,7 @@ Test(multitimer, set_multiple_timer_one_cancel_test_timing, .init = log_setup, .
 
         if(i==TIMER_IDX)
         {
-            cr_assert_eq(timer->active, false, "Cancelled timer still appears active.", i);
+            cr_assert_eq(timer->active, false, "Cancelled timer still appears active.");
             cr_assert_eq(timer->num_timeouts, 0, "Cancelled timer has a non-zero number of timeouts");
             cr_assert_eq(timeouts[TIMER_IDX].tv_sec, 0, "A timeout time was recorded for a cancelled timer");
             cr_assert_eq(timeouts[TIMER_IDX].tv_nsec, 0, "A timeout time was recorded for a cancelled timer");
@@ -592,7 +592,7 @@ Test(multitimer, set_multiple_timer_next_cancel_test_timing, .init = log_setup, 
 
         if(i==0)
         {
-            cr_assert_eq(timer->active, false, "Cancelled timer still appears active.", i);
+            cr_assert_eq(timer->active, false, "Cancelled timer still appears active.");
             cr_assert_eq(timer->num_timeouts, 0, "Cancelled timer has a non-zero number of timeouts");
             cr_assert_eq(timeouts[0].tv_sec, 0, "A timeout time was recorded for a cancelled timer");
             cr_assert_eq(timeouts[0].tv_nsec, 0, "A timeout time was recorded for a cancelled timer");
@@ -656,7 +656,7 @@ Test(multitimer, set_multiple_timer_all_cancel_test_timing, .init = log_setup, .
         rc = mt_get_timer_by_id(&mt, i, &timer);
         cr_assert_eq(rc, CHITCP_OK);
 
-        cr_assert_eq(timer->active, false, "Cancelled timer still appears active.", i);
+        cr_assert_eq(timer->active, false, "Cancelled timer still appears active.");
         cr_assert_eq(timer->num_timeouts, 0, "Cancelled timer has a non-zero number of timeouts");
         cr_assert_eq(timeouts[i].tv_sec, 0, "A timeout time was recorded for a cancelled timer");
         cr_assert_eq(timeouts[i].tv_nsec, 0, "A timeout time was recorded for a cancelled timer");
@@ -713,7 +713,7 @@ Test(multitimer, set_multiple_timer_all_reverse_cancel_test_timing, .init = log_
         rc = mt_get_timer_by_id(&mt, i, &timer);
         cr_assert_eq(rc, CHITCP_OK);
 
-        cr_assert_eq(timer->active, false, "Cancelled timer still appears active.", i);
+        cr_assert_eq(timer->active, false, "Cancelled timer still appears active.");
         cr_assert_eq(timer->num_timeouts, 0, "Cancelled timer has a non-zero number of timeouts");
         cr_assert_eq(timeouts[i].tv_sec, 0, "A timeout time was recorded for a cancelled timer");
         cr_assert_eq(timeouts[i].tv_nsec, 0, "A timeout time was recorded for a cancelled timer");

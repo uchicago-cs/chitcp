@@ -121,17 +121,17 @@ int chitcpd_connect()
 
     struct sockaddr_un serverAddr;
 
-    if ((clientSocket = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+    if ((clientSocket = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1)
     {
         return CHITCP_ESOCKET;
     }
 
     // Create server address
-    serverAddr.sun_family = AF_UNIX;
+    serverAddr.sun_family = AF_LOCAL;
     chitcp_unix_socket(serverAddr.sun_path, UNIX_PATH_MAX);
     len = strlen(serverAddr.sun_path) + sizeof(serverAddr.sun_family);
 
-    if (connect(clientSocket, (struct sockaddr *)&serverAddr, len) == -1)
+    if (connect(clientSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
     {
         return CHITCP_ESOCKET;
     }
