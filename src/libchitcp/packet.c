@@ -73,7 +73,7 @@ uint32_t chitcp_htonl(uint32_t hostlong)
 }
 
 /* See packet.h */
-int chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len)
+int chitcp_tcp_packet_init(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len)
 {
     tcphdr_t *header;
 

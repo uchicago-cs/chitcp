@@ -1128,7 +1128,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
 
     if (entry->tcp_state == ESTABLISHED)
     {
-        /* TODO: According to RFC 793, we actually shouldn't return from close()
+        /* TODO: According to RFC 9293, we actually shouldn't return from close()
          * until we're in FIN_WAIT_2 *and* the retransmission queue is empty.
          * However, a simultaneous close could land us in CLOSING or TIME_WAIT */
         while(! (entry->tcp_state == FIN_WAIT_2 || entry->tcp_state == CLOSING ||

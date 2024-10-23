@@ -77,7 +77,7 @@ int chitcpd_tcp_packet_create(chisocketentry_t *entry, tcp_packet_t *packet, con
 {
     int packet_len;
 
-    packet_len = chitcp_tcp_packet_create(packet, payload, payload_len);
+    packet_len = chitcp_tcp_packet_init(packet, payload, payload_len);
     chitcpd_set_header_ports(entry, TCP_PACKET_HEADER(packet));
 
     return packet_len;

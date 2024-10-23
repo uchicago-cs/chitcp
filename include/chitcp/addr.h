@@ -77,6 +77,15 @@ void chitcp_set_addr_port(struct sockaddr *addr, in_port_t port);
  */
 int chitcp_addr_cmp(struct sockaddr *addr1, struct sockaddr *addr2);
 
+
+/*
+ * chitcp_addr_cmp - Compares ports in two addresses
+ *
+ * addr1, addr2: The addresses
+ *
+ * Returns: 0 if the ports in both addresses are identical.
+ *          Non-zero value otherwise.
+ */
 int chitcp_addr_port_cmp(struct sockaddr *addr1, struct sockaddr *addr2);
 
 
@@ -107,12 +116,33 @@ int chitcp_addr_is_loopback(struct sockaddr *addr);
  */
 char* chitcp_addr_str(struct sockaddr *addr, char *buf, int len);
 
+
+/*
+ * chitcp_addr_construct - Constructs a sockaddr_in for a given host and port
+ *
+ * This function is just a wrapper around getaddrinfo, limited to
+ * IPv4 addresses, and returning the first result returned
+ * by getaddrinfo.
+ *
+ * addr: Address
+ *
+ * buf: Pointer to buffer
+ *
+ * len: Length of buffer.
+ *
+ * Returns: Stores the string representation in buf (without exceeding
+ *          it length) and returns a pointer to the buffer.
+ *          Returns NULL if it was unable to create a string representation
+ *          (e.g., if the provided address is invalid)
+ */
+int chitcp_addr_construct(char *host, char *port, struct sockaddr_in *addr);
+
+
 void* chitcp_get_addr(struct sockaddr *addr);
 
 int chitcp_addr_is_any(struct sockaddr *addr);
 
 int chitcp_addr_set_any(struct sockaddr *addr);
 
-int chitcp_addr_construct(char *host, char *port, struct sockaddr_in *addr);
 
 #endif /* CHITCP_ADDR_H_ */

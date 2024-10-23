@@ -50,7 +50,7 @@
 #define TCP_MSS (536)
 
 /* TCP events. Roughly correspond to the ones specified in
- * http://tools.ietf.org/html/rfc793#section-3.9 */
+ * https://datatracker.ietf.org/doc/html/rfc9293#section-3.10 */
 typedef enum
 {
     APPLICATION_CONNECT = 1,
@@ -70,9 +70,9 @@ typedef enum
     PERSIST             = 1,
 } tcp_timer_type_t;
 
-/*  Many values in tcp_data have identifiers from RFC 793, as below     */
+/*  Many values in tcp_data have identifiers from RFC 9293, as below     */
 
-/*  From RFC 793 definition of the Transmission Control Block:
+/*  From RFC 9293 definition of the Transmission Control Block:
 
     Begin quote:
 
@@ -118,7 +118,7 @@ static inline char *tcp_event_str (tcp_event_type_t evt)
 
 /* TCP data. Roughly corresponds to the variables and buffers
  * one would expect in a Transmission Control Block (as
- * specified in RFC 793). */
+ * specified in RFC 9293). */
 typedef struct tcp_data
 {
     /* Queue with pending packets received from the network */

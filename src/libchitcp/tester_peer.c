@@ -89,7 +89,7 @@ void chitcp_tester_peer_connect(chitcp_tester_t *tester, chitcp_tester_peer_t *p
 {
     struct sockaddr_in serverAddr;
 
-    if(chitcp_addr_construct("localhost", "7", &serverAddr))
+    if(chitcp_addr_construct(NULL, "7", &serverAddr))
     {
         perror("Could not construct address");
         exit(-1);

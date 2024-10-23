@@ -79,7 +79,7 @@ typedef struct tcp_packet
 
 
 /*
- * chitcp_tcp_packet_create - Initializes a tcp_packet_t struct with a payload.
+ * chitcp_tcp_packet_init - Initializes a tcp_packet_t struct with a payload.
  *
  * The TCP header is zeroed out, except for the data offset field, which
  * is initialized to 5 (i.e., TCP header with no options)
@@ -92,7 +92,7 @@ typedef struct tcp_packet
  *
  * Returns: the size in bytes of the TCP packet.
  */
-int chitcp_tcp_packet_create(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len);
+int chitcp_tcp_packet_init(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len);
 
 
 /*

@@ -249,24 +249,21 @@ void chitcp_addr_set_any(struct sockaddr *addr)
 
 int chitcp_addr_construct(char *host, char *port, struct sockaddr_in *addr)
 {
-    struct hostent *he;
-    unsigned iport;
+    struct addrinfo hints, *res, *p;
 
-    memset(addr, 0, sizeof(struct sockaddr_in));
-    addr->sin_family = AF_INET;
-    addr->sin_addr.s_addr = inet_addr(host);
-    if (addr->sin_addr.s_addr == -1)
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET; // chiTCP only supports IPv4
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(host, port, &hints, &res) != 0)
     {
-        he = gethostbyname(host);
-        if (he == NULL || he->h_addrtype != AF_INET || he->h_length != 4)
-        {
-            perror("Invalid host");
-            return -1;
-        }
-        memcpy((char *) &addr->sin_addr, he->h_addr, sizeof(addr->sin_addr));
+        perror("getaddrinfo() failed");
+        exit(-1);
     }
-    sscanf(port, "%u", &iport);
-    addr->sin_port = htons(iport);
+
+    memcpy((char *) addr, res->ai_addr, res->ai_addrlen);
+
+    freeaddrinfo(res);
 
     return 0;
 }
