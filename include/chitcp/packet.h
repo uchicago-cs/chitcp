@@ -266,7 +266,7 @@ typedef struct tcphdr
 #define TCP_PAYLOAD_LEN(p) ((p)->length - (((tcphdr_t *) (p)->raw)->doff * sizeof(uint32_t)))
 
 /* Convenience macros to access the fields in the header,
- * using the nomenclature in RFC 793 */
+ * using the nomenclature in RFC 9293 */
 
 /* segment sequence number */
 #define SEG_SEQ(p) (chitcp_ntohl(TCP_PACKET_HEADER(p)->seq))
