@@ -170,12 +170,12 @@ void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, 
         strcpy(flags, "none");
 
     if(payload_len)
-        snprintf(seqstr, 31, " seq %i:%i,", chitcp_ntohl(header->seq), chitcp_ntohl(header->seq) + payload_len);
+        snprintf(seqstr, 31, " seq %u:%u,", chitcp_ntohl(header->seq), chitcp_ntohl(header->seq) + payload_len);
     else
-        snprintf(seqstr, 31, " seq %i,", chitcp_ntohl(header->seq));
+        snprintf(seqstr, 31, " seq %u,", chitcp_ntohl(header->seq));
 
     if(header->ack)
-        snprintf(ackstr, 31, " ack %i,", chitcp_ntohl(header->ack_seq));
+        snprintf(ackstr, 31, " ack %u,", chitcp_ntohl(header->ack_seq));
     else
         ackstr[0] = '\0';
 
@@ -195,7 +195,7 @@ void chilog_tcp(loglevel_t level, tcp_packet_t *packet, char prefix)
     flockfile(stdout);
     chilog(level, "   ######################################################################");
 
-    chilog(level, "%c  Src: %i  Dest: %i  Seq: %i  Ack: %i  Doff: %i  Win: %i",
+    chilog(level, "%c  Src: %u  Dest: %u  Seq: %u  Ack: %u  Doff: %u  Win: %u",
            prefix,
            chitcp_ntohs(header->source),
            chitcp_ntohs(header->dest),

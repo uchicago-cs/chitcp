@@ -115,13 +115,13 @@ void chilog_tcp_data(loglevel_t level, tcp_data_t *tcp_data, tcp_state_t state)
     chilog(level, "   ······················································");
     chilog(level, "                         %s", tcp_str(state));
     chilog(level, "");
-    chilog(level, "            ISS:  %10i           IRS:  %10i", tcp_data->ISS, tcp_data->IRS);
-    chilog(level, "        SND.UNA:  %10i ", tcp_data->SND_UNA);
-    chilog(level, "        SND.NXT:  %10i       RCV.NXT:  %10i ", tcp_data->SND_NXT, tcp_data->RCV_NXT);
-    chilog(level, "        SND.WND:  %10i       RCV.WND:  %10i ", tcp_data->SND_WND, tcp_data->RCV_WND);
-    chilog(level, "    Send Buffer: %4i / %4i   Recv Buffer: %4i / %4i", snd_buf_size, snd_buf_capacity, rcv_buf_size, rcv_buf_capacity);
+    chilog(level, "            ISS:  %10u           IRS:  %10u", tcp_data->ISS, tcp_data->IRS);
+    chilog(level, "        SND.UNA:  %10u ", tcp_data->SND_UNA);
+    chilog(level, "        SND.NXT:  %10u       RCV.NXT:  %10u ", tcp_data->SND_NXT, tcp_data->RCV_NXT);
+    chilog(level, "        SND.WND:  %10u       RCV.WND:  %10u ", tcp_data->SND_WND, tcp_data->RCV_WND);
+    chilog(level, "    Send Buffer: %4u / %4u   Recv Buffer: %4u / %4u", snd_buf_size, snd_buf_capacity, rcv_buf_size, rcv_buf_capacity);
     chilog(level, "");
-    chilog(level, "       Pending packets: %4i    Closing? %s", chitcp_packet_list_size(tcp_data->pending_packets), tcp_data->closing?"YES":"NO");
+    chilog(level, "       Pending packets: %4u    Closing? %s", chitcp_packet_list_size(tcp_data->pending_packets), tcp_data->closing?"YES":"NO");
     chilog(level, "   ······················································");
     funlockfile(stdout);
 }
