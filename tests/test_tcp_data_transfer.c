@@ -123,8 +123,10 @@ void half_duplex_client_sends(int nbytes)
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -188,8 +190,10 @@ void half_duplex_server_sends(int nbytes)
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -254,8 +258,10 @@ void echo(int nbytes)
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 

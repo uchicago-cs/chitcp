@@ -6,7 +6,7 @@
  *  chiTCP follows a state machine approach to implementing TCP.
  *  This means that there is a handler function for each of
  *  the TCP states (CLOSED, LISTEN, SYN_RCVD, etc.). If an
- *  event (e.g., a packet arrives) while the connection is
+ *  event (e.g., a segment arrives) while the connection is
  *  in a specific state (e.g., ESTABLISHED), then the handler
  *  function for that state is called, along with information
  *  about the event that just happened.
@@ -48,7 +48,7 @@
  *            APPLICATION_CLOSE: Application has called socket_close() and
  *            a connection tear-down should be initiated.
  *
- *            PACKET_ARRIVAL: A packet has arrived through the network and
+ *            SEGMENT_ARRIVAL: A segment has arrived through the network and
  *            needs to be processed (RFC 9293 calls this "SEGMENT ARRIVES")
  *
  *            TIMEOUT: A timeout (e.g., a retransmission timeout) has
@@ -100,16 +100,16 @@
 
 
 /* Forward declaration */
-int chitcpd_tcp_handle_packet(serverinfo_t *si, chisocketentry_t *entry);
+int chitcpd_tcp_handle_segment(serverinfo_t *si, chisocketentry_t *entry);
 
 
 void tcp_data_init(serverinfo_t *si, chisocketentry_t *entry)
 {
     tcp_data_t *tcp_data = &entry->socket_state.active.tcp_data;
 
-    tcp_data->pending_packets = NULL;
-    pthread_mutex_init(&tcp_data->lock_pending_packets, NULL);
-    pthread_cond_init(&tcp_data->cv_pending_packets, NULL);
+    tcp_data->pending_segments = NULL;
+    pthread_mutex_init(&tcp_data->lock_pending_segments, NULL);
+    pthread_cond_init(&tcp_data->cv_pending_segments, NULL);
 
     /* Initialization of additional tcp_data_t fields,
      * and creation of retransmission thread, goes here */
@@ -121,9 +121,9 @@ void tcp_data_free(serverinfo_t *si, chisocketentry_t *entry)
 
     circular_buffer_free(&tcp_data->send);
     circular_buffer_free(&tcp_data->recv);
-    chitcp_packet_list_destroy(&tcp_data->pending_packets);
-    pthread_mutex_destroy(&tcp_data->lock_pending_packets);
-    pthread_cond_destroy(&tcp_data->cv_pending_packets);
+    chitcp_segment_list_destroy(&tcp_data->pending_segments);
+    pthread_mutex_destroy(&tcp_data->lock_pending_segments);
+    pthread_cond_destroy(&tcp_data->cv_pending_segments);
 
     /* Cleanup of additional tcp_data_t fields goes here */
 }
@@ -147,9 +147,9 @@ int chitcpd_tcp_state_handle_CLOSED(serverinfo_t *si, chisocketentry_t *entry, t
 
 int chitcpd_tcp_state_handle_LISTEN(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else
         chilog(WARNING, "In LISTEN state, received unexpected event.");
@@ -159,9 +159,9 @@ int chitcpd_tcp_state_handle_LISTEN(serverinfo_t *si, chisocketentry_t *entry, t
 
 int chitcpd_tcp_state_handle_SYN_RCVD(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == TIMEOUT_RTX)
     {
@@ -175,9 +175,9 @@ int chitcpd_tcp_state_handle_SYN_RCVD(serverinfo_t *si, chisocketentry_t *entry,
 
 int chitcpd_tcp_state_handle_SYN_SENT(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == TIMEOUT_RTX)
     {
@@ -195,9 +195,9 @@ int chitcpd_tcp_state_handle_ESTABLISHED(serverinfo_t *si, chisocketentry_t *ent
     {
         /* Your code goes here */
     }
-    else if (event == PACKET_ARRIVAL)
+    else if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == APPLICATION_RECEIVE)
     {
@@ -223,9 +223,9 @@ int chitcpd_tcp_state_handle_ESTABLISHED(serverinfo_t *si, chisocketentry_t *ent
 
 int chitcpd_tcp_state_handle_FIN_WAIT_1(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == APPLICATION_RECEIVE)
     {
@@ -248,9 +248,9 @@ int chitcpd_tcp_state_handle_FIN_WAIT_1(serverinfo_t *si, chisocketentry_t *entr
 
 int chitcpd_tcp_state_handle_FIN_WAIT_2(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == APPLICATION_RECEIVE)
     {
@@ -259,6 +259,10 @@ int chitcpd_tcp_state_handle_FIN_WAIT_2(serverinfo_t *si, chisocketentry_t *entr
     else if (event == TIMEOUT_RTX)
     {
       /* Your code goes here */
+    }
+    else if (event == TIMEOUT_PST)
+    {
+        /* Your code goes here */
     }
     else
         chilog(WARNING, "In FIN_WAIT_2 state, received unexpected event (%i).", event);
@@ -273,9 +277,9 @@ int chitcpd_tcp_state_handle_CLOSE_WAIT(serverinfo_t *si, chisocketentry_t *entr
     {
         /* Your code goes here */
     }
-    else if (event == PACKET_ARRIVAL)
+    else if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == TIMEOUT_RTX)
     {
@@ -295,9 +299,9 @@ int chitcpd_tcp_state_handle_CLOSE_WAIT(serverinfo_t *si, chisocketentry_t *entr
 
 int chitcpd_tcp_state_handle_CLOSING(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == TIMEOUT_RTX)
     {
@@ -324,9 +328,9 @@ int chitcpd_tcp_state_handle_TIME_WAIT(serverinfo_t *si, chisocketentry_t *entry
 
 int chitcpd_tcp_state_handle_LAST_ACK(serverinfo_t *si, chisocketentry_t *entry, tcp_event_type_t event)
 {
-    if (event == PACKET_ARRIVAL)
+    if (event == SEGMENT_ARRIVAL)
     {
-        chitcpd_tcp_handle_packet(si, entry);
+        chitcpd_tcp_handle_segment(si, entry);
     }
     else if (event == TIMEOUT_RTX)
     {
@@ -344,9 +348,9 @@ int chitcpd_tcp_state_handle_LAST_ACK(serverinfo_t *si, chisocketentry_t *entry,
 
 
 /*
- * chitcpd_tcp_handle_packet - Handles the arrival of a packet
+ * chitcpd_tcp_handle_segment - Handles the arrival of a segment
  *
- * This function is called any time the PACKET_ARRIVAL event takes
+ * This function is called any time the SEGMENT_ARRIVAL event takes
  * place in any state. It must implement section 3.10.7 of RFC 9293.
  * For convenience, we have included the full text of that section
  * inside the function. We recommend interleaving the verbatim
@@ -358,32 +362,32 @@ int chitcpd_tcp_state_handle_LAST_ACK(serverinfo_t *si, chisocketentry_t *entry,
  * entry: Socket entry
  *
  * Returns:
- *   - CHITCP_OK: Packet was processed
- *   - CHITCP_ENOENT: No packets available for processing
+ *   - CHITCP_OK: Segment was processed
+ *   - CHITCP_ENOENT: No segments available for processing
  *
  */
-int chitcpd_tcp_handle_packet(serverinfo_t *si, chisocketentry_t *entry)
+int chitcpd_tcp_handle_segment(serverinfo_t *si, chisocketentry_t *entry)
 {
     tcp_data_t *tcp_data = &entry->socket_state.active.tcp_data;
-    tcp_packet_t *packet = NULL;
+    tcp_segment_t *segment = NULL;
 
-    /* Extract the packet at the head of the pending packets queue */
-    pthread_mutex_lock(&(tcp_data->lock_pending_packets));
-    if(tcp_data->pending_packets)
+    /* Extract the segment at the head of the pending segments queue */
+    pthread_mutex_lock(&(tcp_data->lock_pending_segments));
+    if(tcp_data->pending_segments)
     {
-        packet = tcp_data->pending_packets->packet;
-        chitcp_packet_list_pop_head(&tcp_data->pending_packets);
+        segment = tcp_data->pending_segments->segment;
+        chitcp_segment_list_pop_head(&tcp_data->pending_segments);
     }
-    pthread_mutex_unlock(&(tcp_data->lock_pending_packets));
+    pthread_mutex_unlock(&(tcp_data->lock_pending_segments));
 
-    if (packet == NULL)
+    if (segment == NULL)
     {
-        chilog(WARNING, "No pending packets found.");
+        chilog(WARNING, "No pending segments found.");
         return CHITCP_ENOENT;
     }
 
-    chilog(DEBUG, "Processing TCP packet");
-    chilog_tcp(DEBUG, packet, LOG_INBOUND);
+    chilog(DEBUG, "Processing TCP segment");
+    chilog_tcp(DEBUG, segment, LOG_INBOUND);
 
     /* Implement section 3.10.7 of RFC 9293 below */
 

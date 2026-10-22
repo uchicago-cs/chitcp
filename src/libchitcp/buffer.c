@@ -92,7 +92,7 @@ int circular_buffer_write(circular_buffer_t *buf, uint8_t *data, uint32_t len, b
 
     while (written < len)
     {
-        while(buf->count == buf->maxsize)
+        while(buf->count == buf->maxsize && !buf->closed)
             pthread_cond_wait(&buf->cv_notfull, &buf->lock);
 
         if(buf->closed)

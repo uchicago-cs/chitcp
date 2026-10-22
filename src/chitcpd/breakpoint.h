@@ -68,7 +68,8 @@ enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockf
 /*
  * When closing a chisocketentry_t,
  * call this function to make sure that its debug_monitor is destroyed
- * once no chisockets refer to it.
+ * once no chisockets refer to it. Does nothing if the entry does
+ * not have a debug monitor.
  */
 void chitcpd_debug_detach_monitor(chisocketentry_t *entry);
 

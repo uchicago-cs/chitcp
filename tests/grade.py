@@ -44,14 +44,33 @@ parser.add_argument("--gradescope-assignment", type=int)
 
 args = parser.parse_args()
 
+
+def fail(msg):
+    # When producing Gradescope output, we always need to produce valid JSON
+    # (otherwise, Gradescope will report an autograder failure)
+    if args.gradescope:
+        gradescope_json = {}
+        gradescope_json["score"] = 0.0
+        gradescope_json["output"] = msg
+        gradescope_json["visibility"] = "visible"
+        gradescope_json["stdout_visibility"] = "visible"
+        print(json.dumps(gradescope_json, indent=2))
+        sys.exit(0)
+    else:
+        print(msg)
+        sys.exit(1)
+
+
 if not os.path.exists(args.tests_file):
-    print("Tests file not found: {}".format(args.tests_file))
-    sys.exit(1)
+    fail("Tests file not found: {}".format(args.tests_file))
 
 if not os.path.exists(args.report_file):
-    print("Test results file not found: {}".format(args.report_file))
-    print("Make sure you've run the tests before running this script.")
-    sys.exit(1)
+    if args.gradescope:
+        fail("We were unable to run the tests. This usually means your code did not compile "
+             "(check the autograder output below for any compiler errors).")
+    else:
+        fail("Test results file not found: {}\n"
+             "Make sure you've run the tests before running this script.".format(args.report_file))
 
 
 tests = {}
@@ -64,8 +83,12 @@ with open(args.tests_file) as f:
         all_test_ids.add(test_id)
 
 run_test_ids = set()
-with open(args.report_file) as f:
-    results = json.load(f)
+try:
+    with open(args.report_file) as f:
+        results = json.load(f)
+except ValueError:
+    fail("Could not read the test results file ({}). This can happen if the tests "
+         "crashed before they finished running.".format(args.report_file))
 
 for test_suite in results["test_suites"]:
     category = test_suite["name"]
@@ -145,6 +168,10 @@ if args.gradescope and args.gradescope_assignment is None:
 
     print(json.dumps(gradescope_json, indent=2))
 
+
+if not args.csv and not args.gradescope:
+    print("%59s = %-6.2f / %-10i" % ("TOTAL (" + " + ".join(a.name for a in ASSIGNMENTS) + ")",
+                                     sum(pscores), sum(a.points for a in ASSIGNMENTS)))
 
 if args.csv:
     print(",".join([str(s) for s in pscores]))

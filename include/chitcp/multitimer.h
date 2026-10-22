@@ -66,7 +66,13 @@ typedef struct multi_timer multi_timer_t;
  * - The parameters to the callback function (can be NULL to indicate
  *   there are no parameters)
  *
- * The callback function does not return anything. */
+ * The callback function does not return anything.
+ *
+ * The callback function is called from the multitimer's thread, after
+ * the timer has been marked as inactive. The callback function may call
+ * other multitimer functions (e.g., samples/multitimer.c calls mt_chilog
+ * from its callback), so the multitimer's thread must not hold any of
+ * the multitimer's locks while it runs the callback function. */
 typedef void (*mt_callback_func)(multi_timer_t*, single_timer_t*, void*);
 
 /* Represents a single timer. */
@@ -169,7 +175,7 @@ int mt_get_timer_by_id(multi_timer_t *mt, uint16_t id, single_timer_t **timer);
  *
  * callback_args: Parameters to the callback function (can be NULL)
  *
-  * Returns:
+ * Returns:
  *  - CHITCP_OK: timer set correctly
  *  - CHITCP_EINVAL: Invalid timer identifier, or specified a timer
  *                   that is already active
@@ -177,7 +183,7 @@ int mt_get_timer_by_id(multi_timer_t *mt, uint16_t id, single_timer_t **timer);
 int mt_set_timer(multi_timer_t *mt, uint16_t id, uint64_t timeout, mt_callback_func callback, void* callback_args);
 
 
-/* mt_cancel_timer - Sets a timer
+/* mt_cancel_timer - Cancels a timer
  *
  * Cancels an active timer so it will no longer expire.
  *
@@ -186,7 +192,7 @@ int mt_set_timer(multi_timer_t *mt, uint16_t id, uint64_t timeout, mt_callback_f
  * id: Identifier of the timer to cancel
  *
  * Returns:
- *  - CHITCP_OK: timer set correctly
+ *  - CHITCP_OK: timer cancelled correctly
  *  - CHITCP_EINVAL: Invalid timer identifier, or specified a timer
  *                   that is not active
  */
@@ -195,6 +201,10 @@ int mt_cancel_timer(multi_timer_t *mt, uint16_t id);
 
 /* mt_set_timer_name - Sets the name of a timer
  *
+ * The name can be set regardless of whether the timer is active
+ * (e.g., samples/multitimer.c names its timers before setting them).
+ * Names longer than MAX_TIMER_NAME_LEN characters are truncated.
+ *
  * mt: Multitimer
  *
  * id: Identifier of the timer
@@ -202,11 +212,21 @@ int mt_cancel_timer(multi_timer_t *mt, uint16_t id);
  * name: Name to set for the timer
  *
  * Returns:
- *  - CHITCP_OK: timer set correctly
- *  - CHITCP_EINVAL: Invalid timer identifier, or specified a timer
- *                   that is not active
+ *  - CHITCP_OK: timer name set correctly
+ *  - CHITCP_EINVAL: Invalid timer identifier
  */
 int mt_set_timer_name(multi_timer_t *mt, uint16_t id, const char *name);
+
+
+/* mt_chilog_single_timer - Prints a single timer using chilog
+ *
+ * level: chilog log level
+ *
+ * timer: Timer
+ *
+ * Returns: Always returns CHITCP_OK
+ */
+int mt_chilog_single_timer(loglevel_t level, single_timer_t *timer);
 
 
 /* mt_chilog - Prints all the timers in a multitimer using chilog

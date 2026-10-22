@@ -62,7 +62,7 @@ void chitcp_setloglevel(loglevel_t level)
 void chilog(loglevel_t level, char *fmt, ...)
 {
     struct timespec ts;
-    struct tm *tm;
+    struct tm tm;
     char timefmt[64], buf[80], *levelstr;
     va_list argptr;
 
@@ -71,9 +71,10 @@ void chilog(loglevel_t level, char *fmt, ...)
 
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    if((tm = localtime(&ts.tv_sec)) != NULL)
+    /* localtime is not thread-safe, so we use localtime_r */
+    if(localtime_r(&ts.tv_sec, &tm) != NULL)
     {
-            strftime(timefmt, sizeof(timefmt), "%H:%M:%S.%%09u", tm);
+            strftime(timefmt, sizeof(timefmt), "%H:%M:%S.%%09u", &tm);
             snprintf(buf, sizeof(buf), timefmt, ts.tv_nsec);
     }
 
@@ -140,13 +141,13 @@ static char* srcdst_str(struct sockaddr *src, struct sockaddr *dst, char *buf, i
     return buf;
 }
 
-void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, tcp_packet_t *packet, char* prefix)
+void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, tcp_segment_t *segment, char* prefix)
 {
     if(loglevel != MINIMAL)
         return;
 
-    tcphdr_t *header = (tcphdr_t*) packet->raw;
-    uint16_t payload_len = TCP_PAYLOAD_LEN(packet);
+    tcphdr_t *header = (tcphdr_t*) segment->raw;
+    uint16_t payload_len = TCP_PAYLOAD_LEN(segment);
 
     char srcdst[256];
     char flags[9];
@@ -183,14 +184,14 @@ void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, 
                     sockfd, prefix, srcdst, flags, seqstr, ackstr, chitcp_ntohs(header->win), payload_len);
 }
 
-void chilog_tcp(loglevel_t level, tcp_packet_t *packet, char prefix)
+void chilog_tcp(loglevel_t level, tcp_segment_t *segment, char prefix)
 {
     if(level > loglevel)
         return;
 
-    tcphdr_t *header = (tcphdr_t*) packet->raw;
-    uint8_t *payload = TCP_PAYLOAD_START(packet);
-    uint16_t payload_len = TCP_PAYLOAD_LEN(packet);
+    tcphdr_t *header = (tcphdr_t*) segment->raw;
+    uint8_t *payload = TCP_PAYLOAD_START(segment);
+    uint16_t payload_len = TCP_PAYLOAD_LEN(segment);
 
     flockfile(stdout);
     chilog(level, "   ######################################################################");

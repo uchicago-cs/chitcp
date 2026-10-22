@@ -72,10 +72,10 @@
 enum chitcpd_debug_event {
     DBG_EVT_TCP_STATE_CHANGE    = 1 << 0,
         /* Occurs just after a tcp thread changes the socket's tcp state */
-    DBG_EVT_INCOMING_PACKET     = 1 << 1,
-        /* Occurs just before passing an incoming packet to the socket */
-    DBG_EVT_OUTGOING_PACKET     = 1 << 2,
-        /* Occurs just before sending the socket's packet to the network */
+    DBG_EVT_INCOMING_SEGMENT     = 1 << 1,
+        /* Occurs just before passing an incoming segment to the socket */
+    DBG_EVT_OUTGOING_SEGMENT     = 1 << 2,
+        /* Occurs just before sending the socket's segment to the network */
     DBG_EVT_PENDING_CONNECTION  = 1 << 3,
         /* Occurs just before starting a new tcp thread for the new active
          * socket associated with the original (passive) socket. */
@@ -102,14 +102,20 @@ enum chitcpd_debug_response {
         /* Use the same set of breakpoints for the new (active) socket as
          * are being used for the old (passive) socket. */
 
-    /* For use with DBG_EVT_INCOMING_PACKET and DBG_EVT_OUTGOING_PACKET. */
-    DBG_RESP_DROP, /* drop the packet */
+    /* For use with DBG_EVT_INCOMING_SEGMENT and DBG_EVT_OUTGOING_SEGMENT. */
+    DBG_RESP_DROP, /* drop the segment */
 
-    /* For use with DBG_EVT_INCOMING_PACKET only. */
+    /* For use with DBG_EVT_INCOMING_SEGMENT only. */
     DBG_RESP_DUPLICATE, /* receive one copy as normal; withhold another copy */
-    DBG_RESP_WITHHOLD, /* withhold the packet */
-    DBG_RESP_DRAW_WITHHELD /* receive this packet, and also one of the packets
-                              which was previously withheld (if any) */
+    DBG_RESP_WITHHOLD, /* withhold the segment */
+
+    /* For use with DBG_EVT_INCOMING_SEGMENT and DBG_EVT_TCP_STATE_CHANGE. */
+    DBG_RESP_DRAW_WITHHELD /* With DBG_EVT_INCOMING_SEGMENT: receive this segment,
+                              and also one of the segments which was previously
+                              withheld (if any).
+                              With DBG_EVT_TCP_STATE_CHANGE: deliver one of the
+                              segments which was previously withheld (if any)
+                              now that the socket is in its new state. */
 };
 
 
@@ -194,6 +200,18 @@ int chitcpd_debug(int sockfd, int event_flags, debug_event_handler handler);
 debug_socket_state_t *chitcpd_get_socket_state(int sockfd, bool_t include_buffers);
 
 
+/* Wait until the socket SOCKFD reaches TCP state TCP_STATE.
+ *
+ * Note that this waits for that specific state: if the socket goes through
+ * the state before this function checks it, it will continue to wait.
+ *
+ * Returns 0 once the socket is in TCP_STATE. Waiting for CLOSED on a socket
+ * that has already been freed also returns 0.
+ *
+ * Returns -1 and sets errno on error:
+ *  - EINVAL: TCP_STATE is not a valid TCP state
+ *  - EBADF: SOCKFD is not a valid active socket
+ *  - ENOTCONN: The socket was closed (and freed) before reaching TCP_STATE */
 int chitcpd_wait_for_state(int sockfd, tcp_state_t tcp_state);
 
 #endif /* __CHITCPD_DEBUG_API__H_ */

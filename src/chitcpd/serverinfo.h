@@ -49,7 +49,7 @@
 
 #include "tcp.h"
 #include "chitcp/types.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include "chitcp/debug_api.h"
 
 #define DEFAULT_MAX_SOCKETS (1024u)
@@ -84,8 +84,8 @@ typedef struct tcpconnentry
 /* A pending connection in a passive socket */
 typedef struct pending_connection
 {
-    /* First packet received */
-    tcp_packet_t *initial_packet;
+    /* First segment received */
+    tcp_segment_t *initial_segment;
 
     /* Addresses */
     struct sockaddr_storage local_addr;
@@ -100,7 +100,7 @@ typedef struct pending_connection
 /* State that is specific to active sockets */
 typedef struct active_chisocket_state
 {
-    /* TCP data (packets, buffers, pointers, etc.) */
+    /* TCP data (segments, buffers, pointers, etc.) */
     tcp_data_t tcp_data;
 
     /* Passive socket (if any) from which this socket was created */
@@ -163,6 +163,17 @@ typedef struct chisocketentry
     /* Is this entry available? */
     bool_t available;
 
+    /* Number of threads that have looked up this entry with
+     * chitcpd_lookup_socket or chitcpd_acquire_socket and are still
+     * using it (e.g., to deliver a segment to it), and whether the entry
+     * is being freed. An entry is not freed until its reference count
+     * drops to zero. Both are protected by the socket table lock.
+     * "freeing" is also only set while holding lock_tcp_state (and, for
+     * passive sockets, lock_pending_connections), so it can be safely
+     * checked while holding any of those locks. */
+    int refcount;
+    bool_t freeing;
+
     /* Socket domain
      * Only AF_INET and AF_INET6 are supported. */
     int domain;
@@ -190,9 +201,9 @@ typedef struct chisocketentry
     /* Thread that created this entry */
     pthread_t creator_thread;
 
-    /* Queue for withheld packets (simulating unreliable network) */
-    withheld_tcp_packet_list_t *withheld_packets;
-    pthread_mutex_t lock_withheld_packets;
+    /* Queue for withheld segments (simulating unreliable network) */
+    withheld_tcp_segment_list_t *withheld_segments;
+    pthread_mutex_t lock_withheld_segments;
 
     /* For debug communications */
     debug_monitor_t *debug_monitor;
@@ -209,23 +220,23 @@ typedef struct chisocketentry
 
 
 /*
- * chitcpd_tcp_packet_create - Convenience function to create a TCP packet
+ * chitcpd_tcp_segment_create - Convenience function to create a TCP segment
  *                             for a specific socket entry
  *
  * Only the source port, destination port, and data offset are initialized.
  *
  * entry: Socket entry
  *
- * packet: Pointer to unitialized tcp_packet_t variable.
+ * segment: Pointer to unitialized tcp_segment_t variable.
  *
- * payload: Pointer to payload. The payload will be DEEP COPIED to the packet.
+ * payload: Pointer to payload. The payload will be DEEP COPIED to the segment.
  *
  * payload_len: Size of the payload in number of bytes.
  *
- * Returns: the size in bytes of the TCP packet.
+ * Returns: the size in bytes of the TCP segment.
  *
  */
-int chitcpd_tcp_packet_create(chisocketentry_t *entry, tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len);
+int chitcpd_tcp_segment_create(chisocketentry_t *entry, tcp_segment_t *segment, const uint8_t* payload, uint16_t payload_len);
 
 /* State of the chiTCP daemon */
 typedef enum
@@ -238,21 +249,23 @@ typedef enum
 } chitcpd_state_t;
 
 
-/* The packet_delivery_list_entry_t is used to keep track
- * of packets receoived from the network layer, and which
+/* The segment_delivery_list_entry_t is used to keep track
+ * of segments receoived from the network layer, and which
  * have to be delivered to the appropriate socket */
-typedef struct packet_delivery_list_entry
+typedef struct segment_delivery_list_entry
 {
-    chisocketentry_t *entry;
-    tcp_packet_t* tcp_packet;
+    /* Note: we store the segment's addresses, and not a pointer to the socket
+     * entry, because the socket could be freed before the segment is delivered.
+     * The socket is looked up when the segment is actually delivered. */
+    tcp_segment_t* tcp_segment;
     struct timespec delivery_time;
     char* log_prefix;
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
 
-    struct packet_delivery_list_entry *prev;
-    struct packet_delivery_list_entry *next;
-} packet_delivery_list_entry_t;
+    struct segment_delivery_list_entry *prev;
+    struct segment_delivery_list_entry *next;
+} segment_delivery_list_entry_t;
 
 
 /* The serverinfo_t struct is a singleton data structure that contains
@@ -281,10 +294,10 @@ typedef struct serverinfo
     pthread_t network_thread;
     socket_t network_socket;
 
-    /* This is the thread that delivers the packets received
+    /* This is the thread that delivers the segments received
      * by the network thread (possibly delayed by a latency) */
     pthread_t delivery_thread;
-    packet_delivery_list_entry_t *delivery_queue;
+    segment_delivery_list_entry_t *delivery_queue;
     pthread_mutex_t lock_delivery;
     pthread_cond_t cv_delivery;
     double latency;
@@ -298,6 +311,13 @@ typedef struct serverinfo
     uint16_t chisocket_table_size;
     chisocketentry_t *chisocket_table;
     pthread_mutex_t lock_chisocket_table;
+    pthread_cond_t cv_chisocket_table;
+
+    /* Number of TCP threads that are still running. When the daemon
+     * stops, it waits for this to drop to zero (so no TCP thread is
+     * still using the socket table when it is freed). Protected by
+     * lock_chisocket_table (and signalled through cv_chisocket_table) */
+    int num_tcp_threads;
 
     /* Table of pointers to socket entries.
      * If an entry is NULL, the port is available.
@@ -317,6 +337,16 @@ typedef struct serverinfo
 
 /*
  * chitcpd_update_tcp_state - Updates the TCP state of a socket
+ *
+ * Besides updating the state, this function wakes up any threads waiting
+ * for the socket to change state (e.g., a connect() or accept() call),
+ * and triggers the DBG_EVT_TCP_STATE_CHANGE debug breakpoint. If the
+ * debug handler responds with DBG_RESP_DRAW_WITHHELD, one of the socket's
+ * withheld segments (if any) is placed in the delivery queue.
+ *
+ * If the new state is CLOSED, the socket is also flagged for cleanup:
+ * once the current event has been handled, the TCP thread will generate
+ * a CLEANUP event, and will then free the socket (including its TCP data).
  *
  * si: serverinfo struct
  *
@@ -362,6 +392,11 @@ int chitcpd_allocate_socket(serverinfo_t *si, int *socket_entry);
 /*
  * chitcpd_free_socket_entry - Free resources allocated to a socket
  *
+ * If any other threads are using the socket entry (see chitcpd_lookup_socket),
+ * this function will block until they release it. The caller must not
+ * hold any locks that those threads may need to acquire (in particular,
+ * the socket's lock_event or lock_pending_segments).
+ *
  * si: Server info
  *
  * entry: Pointer to entry in socket table.
@@ -385,7 +420,55 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry);
 int chitcpd_find_ephemeral_port(serverinfo_t *si);
 
 
+/*
+ * chitcpd_lookup_socket - Find the socket that matches a pair of addresses
+ *
+ * If a socket is found, its reference count is incremented, to ensure
+ * that it will not be freed while the caller is using it. The caller
+ * MUST call chitcpd_release_socket once it is done using the entry.
+ * Sockets that are in the process of being freed are not returned.
+ *
+ * si: Server info
+ *
+ * local_addr, remote_addr: Addresses to match
+ *
+ * exact_match_only: If true, do not return matches with wildcard addresses
+ *
+ * Returns: Pointer to the socket entry, or NULL if no socket matches.
+ *
+ */
 chisocketentry_t* chitcpd_lookup_socket(serverinfo_t *si, struct sockaddr *local_addr, struct sockaddr *remote_addr, bool_t exact_match_only);
+
+
+/*
+ * chitcpd_acquire_socket - Get the entry for a socket descriptor
+ *
+ * As with chitcpd_lookup_socket, the entry's reference count is incremented,
+ * and the caller MUST call chitcpd_release_socket once it is done using it.
+ *
+ * si: Server info
+ *
+ * sockfd: Socket descriptor
+ *
+ * Returns: Pointer to the socket entry, or NULL if the descriptor is not
+ *          valid, or if the socket has been freed (or is being freed)
+ *
+ */
+chisocketentry_t* chitcpd_acquire_socket(serverinfo_t *si, int sockfd);
+
+
+/*
+ * chitcpd_release_socket - Release a socket returned by chitcpd_lookup_socket
+ *                          or chitcpd_acquire_socket
+ *
+ * si: Server info
+ *
+ * entry: Pointer to entry in socket table.
+ *
+ * Returns: Nothing
+ *
+ */
+void chitcpd_release_socket(serverinfo_t *si, chisocketentry_t *entry);
 
 void tcp_data_init(serverinfo_t *si, chisocketentry_t *entry);
 void tcp_data_free(serverinfo_t *si, chisocketentry_t *entry);

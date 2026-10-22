@@ -48,7 +48,7 @@
 #include "chitcp/socket.h"
 #include "chitcp/addr.h"
 #include "chitcp/log.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include "chitcp/utils.h"
 #include "protobuf-wrapper.h"
 #include "connection.h"
@@ -217,8 +217,14 @@ void* chitcpd_handler_dispatch(void *args)
 
     for(int i=0; i < si->chisocket_table_size; i++)
     {
-        chisocketentry_t *entry = &si->chisocket_table[i];
-        if(!entry->available && entry->creator_thread == pthread_self())
+        /* We hold a reference to the entry while we use it, since its
+         * TCP thread could be freeing it at the same time. Sockets that are
+         * already being freed are skipped (chitcpd_acquire_socket returns NULL) */
+        chisocketentry_t *entry = chitcpd_acquire_socket(si, i);
+        if(entry == NULL)
+            continue;
+
+        if(entry->creator_thread == pthread_self())
         {
             chilog(DEBUG, "Freeing socket %i", i);
             /* TODO: The connection should be aborted (not closed) here.
@@ -227,16 +233,28 @@ void* chitcpd_handler_dispatch(void *args)
 
             if(entry->actpas_type == SOCKET_ACTIVE)
             {
-                /* Any transition to CLOSED will force a termination of the TCP thread */
+                pthread_t tcp_thread = entry->socket_state.active.tcp_thread;
+
+                /* Any transition to CLOSED will force a termination of the TCP thread.
+                 * We must release the entry before waiting for the TCP thread,
+                 * since the TCP thread frees the entry before exiting. */
                 chitcpd_update_tcp_state(si, entry, CLOSED);
-                pthread_join(entry->socket_state.active.tcp_thread, NULL);
+                chitcpd_release_socket(si, entry);
+                pthread_join(tcp_thread, NULL);
             }
             else if(entry->actpas_type == SOCKET_PASSIVE)
+            {
+                chitcpd_release_socket(si, entry);
                 chitcpd_free_socket_entry(si, entry);
+            }
+            else
+                chitcpd_release_socket(si, entry);
 
             freed_sockets++;
             /* TODO: Close the connection */
         }
+        else
+            chitcpd_release_socket(si, entry);
     }
     if (freed_sockets)
         chilog(DEBUG, "Done freeing open sockets.");
@@ -454,6 +472,10 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     int socket_index;
     int ret, error_code = 0;;
     ChitcpdAcceptArgs *req;
+    /* We hold a reference to both the passive socket and the new active
+     * socket while we use them, to ensure they are not freed from under
+     * us (see chitcpd_free_socket_entry) */
+    chisocketentry_t *entry = NULL, *active_entry = NULL;
 
     chilog(TRACE, ">>> Entering handler for CHITCPD_MSG_CODE__ACCEPT");
 
@@ -463,7 +485,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
 
     sockfd = req->sockfd;
 
-    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
+    entry = chitcpd_acquire_socket(si, sockfd);
+    if(entry == NULL)
     {
         chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
         ret = -1;
@@ -471,7 +494,6 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
         goto done;
     }
 
-    chisocketentry_t *entry = &si->chisocket_table[sockfd];
     passive_chisocket_state_t *socket_state = &entry->socket_state.passive;
     pending_connection_t *pending_connection;
 
@@ -494,10 +516,19 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     }
 
     /* Get the next pending connection from the pending connection queue.
-     * If there are no pending connections, then block until one arrives */
+     * If there are no pending connections, then block until one arrives
+     * (or until the socket is closed by another thread) */
     pthread_mutex_lock(&socket_state->lock_pending_connections);
-    while(socket_state->pending_connections == NULL)
+    while(socket_state->pending_connections == NULL && !entry->freeing)
         pthread_cond_wait(&socket_state->cv_pending_connections, &socket_state->lock_pending_connections);
+    if(entry->freeing)
+    {
+        pthread_mutex_unlock(&socket_state->lock_pending_connections);
+        chilog(ERROR, "Socket %i was closed while waiting for a connection", sockfd);
+        ret = -1;
+        error_code = EBADF;
+        goto done;
+    }
     pending_connection = socket_state->pending_connections;
     DL_DELETE(socket_state->pending_connections, pending_connection);
     pthread_mutex_unlock(&socket_state->lock_pending_connections);
@@ -507,6 +538,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
 
     if(ret != CHITCP_OK)
     {
+        free(pending_connection);
         ret = -1;
         error_code = ENOMEM;
         goto done;
@@ -515,7 +547,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     chilog(MINIMAL, "[S%i] Passive socket has spawned active socket S%i", sockfd, socket_index);
 
     /* Initialize the socket entry */
-    chisocketentry_t *active_entry = &si->chisocket_table[socket_index];
+    active_entry = chitcpd_acquire_socket(si, socket_index);
+    assert(active_entry != NULL);
     active_chisocket_state_t *active_socket_state = &active_entry->socket_state.active;
     struct sockaddr* local_addr = (struct sockaddr*) &pending_connection->local_addr;
     struct sockaddr* remote_addr = (struct sockaddr*) &pending_connection->remote_addr;
@@ -551,24 +584,24 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
      * chitcpd_debug_breakpoint, in order to avoid a race condition. */
 
     /* Strictly speaking, the socket should transition to SYN_RCVD
-     * because we've received a SYN packet. However, this transition
+     * because we've received a SYN segment. However, this transition
      * is handled in the TCP thread, not here. So, we initialize
      * the state of the socket to LISTEN (even though only the passive
      * socket should have that state), so that the transition will
      * correctly happen in the TCP thread. */
     active_entry->tcp_state = LISTEN;
 
-    pthread_mutex_lock(&active_socket_state->tcp_data.lock_pending_packets);
-    chilog(TRACE, "accept() initial packet: enqueueing a copy");
-    chitcp_packet_list_append(&active_socket_state->tcp_data.pending_packets, pending_connection->initial_packet);
-    pthread_mutex_unlock(&active_socket_state->tcp_data.lock_pending_packets);
+    pthread_mutex_lock(&active_socket_state->tcp_data.lock_pending_segments);
+    chilog(TRACE, "accept() initial segment: enqueueing a copy");
+    chitcp_segment_list_append(&active_socket_state->tcp_data.pending_segments, pending_connection->initial_segment);
+    pthread_mutex_unlock(&active_socket_state->tcp_data.lock_pending_segments);
 
     /* Start TCP thread */
     chitcpd_tcp_start_thread(si, &si->chisocket_table[socket_index]);
 
     pthread_mutex_lock(&active_entry->lock_tcp_state);
-    /* Signal the thread to indicate there is an incoming packet
-     * Assuming it's a SYN packet, this will initiate the three-way
+    /* Signal the thread to indicate there is an incoming segment
+     * Assuming it's a SYN segment, this will initiate the three-way
      * handshake with the peer */
     chilog(TRACE, "Signaling socket thread...");
     pthread_mutex_lock(&active_socket_state->lock_event);
@@ -576,10 +609,24 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
     pthread_cond_broadcast(&active_socket_state->cv_event);
     pthread_mutex_unlock(&active_socket_state->lock_event);
 
-    /* Wait for socket to enter ESTABLISHED state */
+    /* Wait for socket to complete the three-way handshake. Note that we
+     * can't wait for the socket to be in the ESTABLISHED state specifically:
+     * if the peer sends a FIN right after its final ACK, the TCP thread may
+     * process both segments (and transition to CLOSE_WAIT) before this thread
+     * gets a chance to check the state, and we would wait forever. */
     chilog(TRACE, "Waiting for ESTABLISHED...");
-    while(active_entry->tcp_state != ESTABLISHED)
+    while((active_entry->tcp_state == LISTEN || active_entry->tcp_state == SYN_RCVD) && !active_entry->freeing)
         pthread_cond_wait(&active_entry->cv_tcp_state, &active_entry->lock_tcp_state);
+    if(active_entry->freeing)
+    {
+        /* The connection was closed before the three-way handshake completed */
+        pthread_mutex_unlock(&active_entry->lock_tcp_state);
+        free(pending_connection);
+        chilog(ERROR, "Socket %i was closed during the three-way handshake", socket_index);
+        ret = -1;
+        error_code = ECONNABORTED;
+        goto done;
+    }
     pthread_mutex_unlock(&active_entry->lock_tcp_state);
 
     chilog(TRACE, "Socket connection is ESTABLISHED");
@@ -609,6 +656,11 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__ACCEPT)
 #endif
 
 done:
+    if(active_entry)
+        chitcpd_release_socket(si, active_entry);
+    if(entry)
+        chitcpd_release_socket(si, entry);
+
     /* Create response return code */
     resp->ret = ret;
     resp->error_code = error_code;
@@ -627,6 +679,9 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     struct sockaddr_storage addr;
     int ret, error_code = 0;;
     ChitcpdConnectArgs *req;
+    /* We hold a reference to the socket entry while we use it, to ensure
+     * it is not freed from under us (see chitcpd_free_socket_entry) */
+    chisocketentry_t *entry = NULL;
 
     chilog(TRACE, ">>> Entering handler for CHITCPD_MSG_CODE__CONNECT");
 
@@ -638,7 +693,8 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     addrlen = req->addr.len;
     memcpy(&addr, req->addr.data, addrlen);
 
-    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
+    entry = chitcpd_acquire_socket(si, sockfd);
+    if(entry == NULL)
     {
         chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
         ret = -1;
@@ -648,7 +704,6 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
 
     tcpconnentry_t *connection;
     active_chisocket_state_t *socket_state;
-    chisocketentry_t *entry = &si->chisocket_table[sockfd];
     int port;
 
     if(entry->tcp_state != CLOSED)
@@ -680,7 +735,6 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     }
 
     /* Initialize socket entry */
-    entry = &si->chisocket_table[sockfd];
     entry->actpas_type = SOCKET_ACTIVE;
     socket_state = &entry->socket_state.active;
 
@@ -728,21 +782,13 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     pthread_cond_broadcast(&socket_state->cv_event);
     pthread_mutex_unlock(&socket_state->lock_event);
 
-    /* Wait for socket to enter ESTABLISHED state */
+    /* Wait for socket to complete the three-way handshake. Note that we
+     * can't wait for the socket to be in the ESTABLISHED state specifically:
+     * if the peer sends a FIN right after the three-way handshake, the TCP
+     * thread may transition to CLOSE_WAIT before this thread gets a chance
+     * to check the state, and we would wait forever. */
     chilog(TRACE, "Waiting for ESTABLISHED...");
-    /* TODO: There is a potential race condition here, where the thread
-     *       will wake up to check the condition variable, but it will have
-     *       gone past the ESTABLISHED state because the peer has already
-     *       initiated a condition teardown. So far, this race condition
-     *       only manifested itself in the tests, and we fixed that
-     *       by ensuring the tests don't initiate a connection tear-down until
-     *       the socket is in an ESTABLISHED state.
-     *
-     *       Solving this issue would require additional variables / synchronization
-     *       to ensure that a connection teardown cannot be initiated if the socket
-     *       is in ESTABLISHED state by connect() hasn't returned yet.
-     */
-    while(entry->tcp_state != ESTABLISHED)
+    while((entry->tcp_state == CLOSED || entry->tcp_state == SYN_SENT) && !entry->freeing)
     {
         struct timespec ts;
         int rc;
@@ -757,6 +803,15 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
             chilog(TRACE, "Waiting for ESTABLISHED... [timeout, state=%i]", entry->tcp_state);
         }
     }
+    if(entry->freeing)
+    {
+        /* The connection was closed before the three-way handshake completed */
+        pthread_mutex_unlock(&entry->lock_tcp_state);
+        chilog(ERROR, "Socket %i was closed during the three-way handshake", sockfd);
+        ret = -1;
+        error_code = ECONNABORTED;
+        goto done;
+    }
     pthread_mutex_unlock(&entry->lock_tcp_state);
 
     chilog(TRACE, "Socket connection is ESTABLISHED");
@@ -764,6 +819,9 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CONNECT)
     ret = 0;
 
 done:
+    if(entry)
+        chitcpd_release_socket(si, entry);
+
     /* Create response */
     resp->ret = ret;
     resp->error_code = error_code;
@@ -1006,6 +1064,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
     chisocket_t sockfd;
     int ret, error_code = 0;
     ChitcpdCloseArgs *req;
+    chisocketentry_t *entry = NULL;
 
     chilog(TRACE, ">>> Entering handler for CHITCPD_MSG_CODE__CLOSE");
 
@@ -1017,14 +1076,16 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
 
     chilog(TRACE, ">>> CLOSE sockfd=%i", sockfd);
 
-    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available)
+    /* We hold a reference to the socket entry while we use it, to ensure
+     * it is not freed from under us (see chitcpd_free_socket_entry) */
+    entry = chitcpd_acquire_socket(si, sockfd);
+    if(entry == NULL)
     {
         chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
         ret = -1;
         error_code = EBADF;
         goto done;
     }
-    chisocketentry_t *entry = &si->chisocket_table[sockfd];
 
     if(entry->tcp_state == CLOSED)
     {
@@ -1040,8 +1101,12 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
          * can simply go ahead and release its resources */
         /* TODO: If chitcp ever implements ICMP, we would need to sent
          * ICMP messages to any pending connections to let them know
-         * this socket has been closed. */
+         * this socket has been closed. We must release our reference
+         * first, since chitcpd_free_socket_entry waits until all
+         * references have been released. */
+        chitcpd_release_socket(si, entry);
         chitcpd_free_socket_entry(si, entry);
+        entry = NULL;
         ret = 0;
         goto done;
     }
@@ -1121,6 +1186,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
                 "ent state (should be ESTABLISHED or CLOSE_WAIT)");
         ret = -1;
         error_code = EBADF;
+        pthread_mutex_unlock(&entry->lock_tcp_state);
         goto done;
     }
 
@@ -1132,12 +1198,14 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
          * until we're in FIN_WAIT_2 *and* the retransmission queue is empty.
          * However, a simultaneous close could land us in CLOSING or TIME_WAIT */
         while(! (entry->tcp_state == FIN_WAIT_2 || entry->tcp_state == CLOSING ||
-                 entry->tcp_state == TIME_WAIT || entry->tcp_state == CLOSED ))
+                 entry->tcp_state == TIME_WAIT || entry->tcp_state == CLOSED ||
+                 entry->freeing))
             pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
     }
     else if (entry->tcp_state == CLOSE_WAIT)
     {
-        while(! (entry->tcp_state == LAST_ACK || entry->tcp_state == CLOSED) )
+        while(! (entry->tcp_state == LAST_ACK || entry->tcp_state == CLOSED ||
+                 entry->freeing))
             pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
     }
 
@@ -1160,6 +1228,9 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__CLOSE)
     ret = 0;
 
 done:
+    if(entry)
+        chitcpd_release_socket(si, entry);
+
     /* Create response */
     resp->ret = ret;
     resp->error_code = error_code;
@@ -1312,6 +1383,7 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
     int ret, error_code = 0;
     tcp_state_t tcp_state;
     ChitcpdWaitForStateArgs *req;
+    chisocketentry_t *entry;
 
     chilog(TRACE, ">>> Entering handler for CHITCPD_MSG_CODE__WAIT_FOR_STATE");
 
@@ -1322,23 +1394,6 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
     sockfd = req->sockfd;
     tcp_state = req->tcp_state;
 
-    if(si->chisocket_table[sockfd].available && tcp_state == CLOSED)
-    {
-        chilog(TRACE, "Waiting for CLOSED, but socket %i has already been freed, so returning", sockfd);
-        ret = 0;
-
-        goto done;
-    }
-
-    if(sockfd < 0 || sockfd >= si->chisocket_table_size || si->chisocket_table[sockfd].available || si->chisocket_table[sockfd].actpas_type != SOCKET_ACTIVE)
-    {
-        chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
-        ret = -1;
-        error_code = EBADF;
-        goto done;
-    }
-    chisocketentry_t *entry = &si->chisocket_table[sockfd];
-
     if(!IS_VALID_TCP_STATE(tcp_state))
     {
         chilog(ERROR, "Not a valid TCP state: %i", tcp_state);
@@ -1347,16 +1402,51 @@ HANDLER_FUNCTION(CHITCPD_MSG_CODE__WAIT_FOR_STATE)
         goto done;
     }
 
+    /* We hold a reference to the socket entry while we wait, to ensure
+     * it is not freed from under us (see chitcpd_free_socket_entry) */
+    entry = chitcpd_acquire_socket(si, sockfd);
+
+    if(entry == NULL && tcp_state == CLOSED && sockfd >= 0 && sockfd < si->chisocket_table_size)
+    {
+        chilog(TRACE, "Waiting for CLOSED, but socket %i has already been freed, so returning", sockfd);
+        ret = 0;
+        goto done;
+    }
+
+    if(entry == NULL || entry->actpas_type != SOCKET_ACTIVE)
+    {
+        chilog(ERROR, "Not a valid chisocket descriptor: %i", sockfd);
+        if(entry)
+            chitcpd_release_socket(si, entry);
+        ret = -1;
+        error_code = EBADF;
+        goto done;
+    }
+
+    /* If the socket starts being freed while we're waiting, we stop waiting
+     * (the socket must have reached the CLOSED state, and its state will
+     * not change anymore) */
     pthread_mutex_lock(&entry->lock_tcp_state);
     chilog(TRACE, "Socket %i is %s. Waiting for %s.", sockfd, tcp_str(entry->tcp_state), tcp_str(tcp_state));
-    while(entry->tcp_state != tcp_state)
+    while(entry->tcp_state != tcp_state && !entry->freeing)
     {
         pthread_cond_wait(&entry->cv_tcp_state, &entry->lock_tcp_state);
         chilog(TRACE, "Socket %i is %s. Waiting for %s.", sockfd, tcp_str(entry->tcp_state), tcp_str(tcp_state));
     }
+
+    if(entry->tcp_state == tcp_state)
+    {
+        ret = 0;
+    }
+    else
+    {
+        chilog(ERROR, "Socket %i was closed while waiting for %s", sockfd, tcp_str(tcp_state));
+        ret = -1;
+        error_code = ENOTCONN;
+    }
     pthread_mutex_unlock(&entry->lock_tcp_state);
 
-    ret = 0;
+    chitcpd_release_socket(si, entry);
 
  done:
     /* Create response */

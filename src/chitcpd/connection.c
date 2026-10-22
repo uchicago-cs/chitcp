@@ -2,7 +2,7 @@
  *  chiTCP - A simple, testable TCP stack
  *
  *  Functions to handle (real) TCP connections, including
- *  sending/receiving TCP packets.
+ *  sending/receiving TCP segments.
  *
  *  Here, "connection" refers to a TCP connection between two
  *  chiTCP daemons, *not* to a chiTCP connection (between two
@@ -127,9 +127,9 @@ void* chitcpd_connection_thread_func(void *args)
 
             if(chitcp_header.proto == CHITCP_PROTO_TCP)
             {
-                /* This means the header will be following by a TCP packet */
+                /* This means the header will be following by a TCP segment */
 
-                /* Receive the packet */
+                /* Receive the segment */
                 nbytes = recv(connection->realsocket_recv, buf, payload_len, MSG_WAITALL);
                 if (nbytes == 0)
                 {
@@ -149,24 +149,24 @@ void* chitcpd_connection_thread_func(void *args)
                 {
                     chilog(TRACE, "chiTCP packet contains a TCP payload");
 
-                    /* Allocate memory for received TCP packet */
-                    tcp_packet_t *packet = malloc(sizeof(tcp_packet_t));
-                    packet->raw = malloc(payload_len);
-                    memcpy(packet->raw, buf, payload_len);
-                    packet->length = payload_len;
+                    /* Allocate memory for received TCP segment */
+                    tcp_segment_t *segment = malloc(sizeof(tcp_segment_t));
+                    segment->raw = malloc(payload_len);
+                    memcpy(segment->raw, buf, payload_len);
+                    segment->length = payload_len;
 
-                    /* Print the packet to the log */
-                    chilog_tcp(TRACE, packet, LOG_INBOUND);
+                    /* Print the segment to the log */
+                    chilog_tcp(TRACE, segment, LOG_INBOUND);
 
-                    /* chitcpd_recv_tcp_packet does the heavy lifting of getting the
-                     * packet to the right socket */
-                    ret = chitcpd_recv_tcp_packet(si, packet, (struct sockaddr*) &local_addr, (struct sockaddr*) &peer_addr);
+                    /* chitcpd_recv_tcp_segment does the heavy lifting of getting the
+                     * segment to the right socket */
+                    ret = chitcpd_recv_tcp_segment(si, segment, (struct sockaddr*) &local_addr, (struct sockaddr*) &peer_addr);
 
                     if(ret != CHITCP_OK)
                     {
                         /* TODO: Should send some sort of ICMP-ish message back to peer.
-                         * For now, we just silently drop the packet */
-                        chilog(WARNING, "Received a packet but did not find a socket to deliver it to (in real TCP, a ICMP message would be sent back to peer)");
+                         * For now, we just silently drop the segment */
+                        chilog(WARNING, "Received a segment but did not find a socket to deliver it to (in real TCP, a ICMP message would be sent back to peer)");
                     }
                 }
             }
@@ -309,8 +309,8 @@ tcpconnentry_t* chitcpd_create_connection(serverinfo_t *si, struct sockaddr* add
     /* If we're connecting to the loopback address, the connection thread
      * is created by the network thread (when the connection is accepted)
      * not here. The reason is that the connection thread handles all
-     * inbound packets (through realsocket_recv), and we do not know what
-     * the socket for receiving packets will be until we accept() the connection.
+     * inbound segments (through realsocket_recv), and we do not know what
+     * the socket for receiving segments will be until we accept() the connection.
      */
     if(!chitcp_addr_is_loopback((struct sockaddr *) &connection->peer_addr))
     {
@@ -398,58 +398,58 @@ tcpconnentry_t* chitcpd_add_connection(serverinfo_t *si, socket_t realsocket_sen
 }
 
 /*
- * chitcpd_send_tcp_packet - Sends a TCP packet over chiTCP
+ * chitcpd_send_tcp_segment - Sends a TCP segment over chiTCP
  *
  * si: Serverinfo struct
  *
  * sock: Socket table entry
  *
- * tcp_packet: TCP packet to send
+ * tcp_segment: TCP segment to send
  *
- * Returns: Number of bytes of data (excluding packet headers) sent
+ * Returns: Number of bytes of data (excluding segment headers) sent
  *
  */
-int chitcpd_send_tcp_packet(serverinfo_t *si, chisocketentry_t *sock, tcp_packet_t* tcp_packet)
+int chitcpd_send_tcp_segment(serverinfo_t *si, chisocketentry_t *sock, tcp_segment_t* tcp_segment)
 {
-    enum chitcpd_debug_response r = chitcpd_debug_breakpoint(si, ptr_to_fd(si, sock), DBG_EVT_OUTGOING_PACKET, -1);
+    enum chitcpd_debug_response r = chitcpd_debug_breakpoint(si, ptr_to_fd(si, sock), DBG_EVT_OUTGOING_SEGMENT, -1);
 
     if (r == DBG_RESP_DROP)
     {
-        chilog(TRACE, "chitcpd_send_tcp_packet: dropping the packet");
-        chilog_tcp_minimal((struct sockaddr *) &sock->local_addr, (struct sockaddr *) &sock->remote_addr, SOCKET_NO(si, sock), tcp_packet, MINLOG_SEND_DROP);
-        return tcp_packet->length; /* fake that the packet was sent */
+        chilog(TRACE, "chitcpd_send_tcp_segment: dropping the segment");
+        chilog_tcp_minimal((struct sockaddr *) &sock->local_addr, (struct sockaddr *) &sock->remote_addr, SOCKET_NO(si, sock), tcp_segment, MINLOG_SEND_DROP);
+        return tcp_segment->length; /* fake that the segment was sent */
     }
     tcpconnentry_t *connection = sock->socket_state.active.realtcpconn;
 
-    /* Allocate memory for the chiTCP header and the TCP packet */
-    uint8_t *full_packet = calloc(sizeof(chitcphdr_t) + tcp_packet->length, 1);
+    /* Allocate memory for the chiTCP header and the TCP segment */
+    uint8_t *full_packet = calloc(sizeof(chitcphdr_t) + tcp_segment->length, 1);
 
 
     /* Create the chiTCP header */
     chitcphdr_t *header = (chitcphdr_t *) full_packet;
-    header->payload_len = chitcp_htons(tcp_packet->length);
+    header->payload_len = chitcp_htons(tcp_segment->length);
     header->proto = CHITCP_PROTO_TCP;
 
-    /* Copy the packet */
-    memcpy(full_packet + sizeof(chitcphdr_t), tcp_packet->raw, tcp_packet->length);
+    /* Copy the segment */
+    memcpy(full_packet + sizeof(chitcphdr_t), tcp_segment->raw, tcp_segment->length);
 
-    /* Print the chiTCP header and the full TCP packet */
+    /* Print the chiTCP header and the full TCP segment */
     chilog(TRACE, "Sending a chiTCP packet with a TCP payload.");
     chilog(TRACE, "chiTCP Header:");
     chilog_chitcp(TRACE, (uint8_t*) header, LOG_OUTBOUND);
 
     chilog(TRACE, "TCP payload:");
-    chilog_tcp_minimal((struct sockaddr *) &sock->local_addr, (struct sockaddr *) &sock->remote_addr, SOCKET_NO(si, sock), tcp_packet, MINLOG_SEND);
-    chilog_tcp(TRACE, tcp_packet, LOG_OUTBOUND);
+    chilog_tcp_minimal((struct sockaddr *) &sock->local_addr, (struct sockaddr *) &sock->remote_addr, SOCKET_NO(si, sock), tcp_segment, MINLOG_SEND);
+    chilog_tcp(TRACE, tcp_segment, LOG_OUTBOUND);
 
-    /* Send the chiTCP header and the TCP packet */
+    /* Send the chiTCP header and the TCP segment */
     int nbytes, nleft, nwritten = 0;
 
     uint8_t *buf = full_packet;
-    nleft = sizeof(chitcphdr_t) + tcp_packet->length;
+    nleft = sizeof(chitcphdr_t) + tcp_segment->length;
 
     /* TODO: Possible race condition if multiple TCP threads want to send
-     * at the same time *and* this send() doesn't send the entire packet */
+     * at the same time *and* this send() doesn't send the entire segment */
     while ( nleft > 0 ) {
         if ( (nbytes = send(connection->realsocket_send, buf, nleft, 0)) <= 0 ) {
             return -1;
@@ -458,47 +458,56 @@ int chitcpd_send_tcp_packet(serverinfo_t *si, chisocketentry_t *sock, tcp_packet
         buf += nbytes;
         nwritten += nbytes;
     }
-    assert(nwritten == sizeof(chitcphdr_t) + tcp_packet->length);
+    assert(nwritten == sizeof(chitcphdr_t) + tcp_segment->length);
 
     free(full_packet);
 
-    return tcp_packet->length;
+    return tcp_segment->length;
 }
 
 
 /* Forward declarations */
-void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
-void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
-int chitcpd_pcap_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *peer_addr);
+void chitcpd_queue_segment_delivery(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
+void chitcpd_deliver_segment(serverinfo_t *si, chisocketentry_t *entry, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
+void chitcpd_lookup_and_deliver_segment(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix);
+bool_t chitcpd_delivery_queue_has_segments(serverinfo_t *si, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr);
+int chitcpd_pcap_packet(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *peer_addr);
 
 
-void* chitcpd_packet_delivery_thread_func(void *args)
+void* chitcpd_segment_delivery_thread_func(void *args)
 {
-    packet_delivery_thread_args_t *pdta;
+    segment_delivery_thread_args_t *pdta;
     struct timespec now;
     struct timespec next;
 
     pthread_detach(pthread_self());
 
-    pdta = (packet_delivery_thread_args_t *) args;
+    pdta = (segment_delivery_thread_args_t *) args;
     serverinfo_t *si = pdta->si;
     free(args);
 
     pthread_mutex_lock(&si->lock_delivery);
 
-    while(! (si->state == CHITCPD_STATE_STOPPING || si->state == CHITCPD_STATE_STOPPING) )
+    for(;;)
     {
+        pthread_mutex_lock(&si->lock_state);
+        bool_t stopping = (si->state == CHITCPD_STATE_STOPPING || si->state == CHITCPD_STATE_STOPPED);
+        pthread_mutex_unlock(&si->lock_state);
+        if(stopping)
+            break;
+
         while(si->delivery_queue)
         {
-            packet_delivery_list_entry_t *list_entry = si->delivery_queue;
+            segment_delivery_list_entry_t *list_entry = si->delivery_queue;
 
             clock_gettime(CLOCK_REALTIME, &now);
             if(now.tv_sec > list_entry->delivery_time.tv_sec ||
                (now.tv_sec == list_entry->delivery_time.tv_sec && now.tv_nsec >= list_entry->delivery_time.tv_nsec))
             {
-                chitcpd_deliver_packet(si, list_entry->entry, list_entry->tcp_packet,
-                                       &list_entry->local_addr, &list_entry->remote_addr, list_entry->log_prefix);
+                chitcpd_lookup_and_deliver_segment(si, list_entry->tcp_segment,
+                                                  &list_entry->local_addr, &list_entry->remote_addr, list_entry->log_prefix);
                 DL_DELETE(si->delivery_queue, list_entry);
+                free(list_entry);
             }
             else
             {
@@ -519,28 +528,30 @@ void* chitcpd_packet_delivery_thread_func(void *args)
 
     }
 
+    pthread_mutex_unlock(&si->lock_delivery);
+
     return NULL;
 }
 
 
 
 /*
- * chitcpd_recv_tcp_packet - Handle the reception of a TCP packet over chiTCP
+ * chitcpd_recv_tcp_segment - Handle the reception of a TCP segment over chiTCP
  *
  * si: Server info
  *
- * tcp_packet: TCP packet that has been received
+ * tcp_segment: TCP segment that has been received
  *
- * peer_addr: Address of peer from whence the TCP packet arrived
+ * peer_addr: Address of peer from whence the TCP segment arrived
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Segment was processed correctly
  *  - CHITCP_ESOCKET: Invalid socket
  *
  */
-int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct sockaddr *local_realaddr, struct sockaddr *peer_realaddr)
+int chitcpd_recv_tcp_segment(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr *local_realaddr, struct sockaddr *peer_realaddr)
 {
-    tcphdr_t *header = (tcphdr_t*) tcp_packet->raw;
+    tcphdr_t *header = (tcphdr_t*) tcp_segment->raw;
     chisocketentry_t *entry;
     struct sockaddr_storage local_addr, remote_addr;
 
@@ -550,7 +561,7 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
     chitcp_set_addr_port((struct sockaddr*) &local_addr, header->dest);
     chitcp_set_addr_port((struct sockaddr*) &remote_addr, header->source);
 
-    /* Get entry of socket that will receive this packet */
+    /* Get entry of socket that will receive this segment */
     entry = chitcpd_lookup_socket(si, (struct sockaddr *) &local_addr, (struct sockaddr *) &remote_addr, FALSE);
 
     if(entry == NULL)
@@ -566,123 +577,127 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
     if(entry->actpas_type == SOCKET_UNINITIALIZED)
     {
         /* This should not happen */
-        chilog(ERROR, "Received packet for socket %i (port %i) but it is not initialized.", sockfd, chitcp_ntohs(header->dest));
+        chilog(ERROR, "Received segment for socket %i (port %i) but it is not initialized.", sockfd, chitcp_ntohs(header->dest));
 
+        chitcpd_release_socket(si, entry);
         return CHITCP_ESOCKET;
     }
 
-    /* Check whether we need to drop/withhold/etc. this packet */
+    /* Check whether we need to drop/withhold/etc. this segment */
     enum chitcpd_debug_response r =
-        chitcpd_debug_breakpoint(si, ptr_to_fd(si, entry), DBG_EVT_INCOMING_PACKET, -1);
+        chitcpd_debug_breakpoint(si, ptr_to_fd(si, entry), DBG_EVT_INCOMING_SEGMENT, -1);
 
-    /* If we're delivering a withheld packet, we will end up with an additional packet
+    /* If we're delivering a withheld segment, we will end up with an additional segment
      * to deliver */
-    withheld_tcp_packet_t *withheld_packet = NULL;
+    withheld_tcp_segment_t *withheld_segment = NULL;
 
     if (r == DBG_RESP_DROP)
     {
-        /* If dropping the packet, we don't do anything but we log it */
-        chilog_tcp_minimal((struct sockaddr *) &local_addr, (struct sockaddr *) &remote_addr, SOCKET_NO(si, entry), tcp_packet, MINLOG_RCVD_DROP);
+        /* If dropping the segment, we don't do anything but we log it */
+        chilog_tcp_minimal((struct sockaddr *) &local_addr, (struct sockaddr *) &remote_addr, SOCKET_NO(si, entry), tcp_segment, MINLOG_RCVD_DROP);
     }
     else
     {
 
-        /* If DBG_RESP_WITHHOLD, we add the packet to the withheld list.
-         * If DBG_RESP_DUPLICATE, we add the packet to the withheld list (this will be the duplicate)
+        /* If DBG_RESP_WITHHOLD, we add the segment to the withheld list.
+         * If DBG_RESP_DUPLICATE, we add the segment to the withheld list (this will be the duplicate)
          * and further below we deliver it as well (so, ultimately, we will receive two copies)
          */
         if (r == DBG_RESP_WITHHOLD || r == DBG_RESP_DUPLICATE)
         {
-            /* Put the packet on the socket's withheld_packets queue */
-            chilog(TRACE, "chitcpd_recv_tcp_packet: withholding a copy");
+            /* Put the segment on the socket's withheld_segments queue */
+            chilog(TRACE, "chitcpd_recv_tcp_segment: withholding a copy");
 
-            withheld_tcp_packet_t *wp = calloc(sizeof(withheld_tcp_packet_t), 1);
+            withheld_tcp_segment_t *wp = calloc(sizeof(withheld_tcp_segment_t), 1);
 
             /* If we're creating a duplicate, make a deep copy */
             if (r == DBG_RESP_DUPLICATE)
             {
-                wp->packet = calloc(sizeof(tcp_packet_t), 1);
-                wp->packet->length = tcp_packet->length;
-                wp->packet->raw = calloc(tcp_packet->length, 1);
+                wp->segment = calloc(sizeof(tcp_segment_t), 1);
+                wp->segment->length = tcp_segment->length;
+                wp->segment->raw = calloc(tcp_segment->length, 1);
                 wp->duplicate = TRUE;
-                memcpy(wp->packet->raw, tcp_packet->raw, tcp_packet->length);
+                memcpy(wp->segment->raw, tcp_segment->raw, tcp_segment->length);
             }
-            /* Otherwise, if we're just withholding the packet, we just
+            /* Otherwise, if we're just withholding the segment, we just
              * need to point to it, since it won't be processed (and freed)
              * until it is un-withheld */
             else
             {
-                wp->packet = tcp_packet;
+                wp->segment = tcp_segment;
                 wp->duplicate = FALSE;
             }
 
             memcpy(&wp->local_addr, &local_addr, sizeof(struct sockaddr_storage));
             memcpy(&wp->remote_addr, &remote_addr, sizeof(struct sockaddr_storage));
 
-            pthread_mutex_lock(&entry->lock_withheld_packets);
-            DL_APPEND(entry->withheld_packets, wp);
-            pthread_mutex_unlock(&entry->lock_withheld_packets);
+            pthread_mutex_lock(&entry->lock_withheld_segments);
+            DL_APPEND(entry->withheld_segments, wp);
+            pthread_mutex_unlock(&entry->lock_withheld_segments);
         }
-        /* If, besides receiving the current packet, we also want to deliver a withheld packet,
+        /* If, besides receiving the current segment, we also want to deliver a withheld segment,
          * we get one from the withheld list */
         else if (r == DBG_RESP_DRAW_WITHHELD)
         {
-            /* Put a previously withheld packet in the socket's packet queue */
-            chilog(TRACE, "chitcpd_recv_tcp_packet: delivering a withheld packet");
-            pthread_mutex_lock(&entry->lock_withheld_packets);
-            withheld_packet = entry->withheld_packets;
-            if(withheld_packet)
-                DL_DELETE(entry->withheld_packets, entry->withheld_packets);
-            pthread_mutex_unlock(&entry->lock_withheld_packets);
+            /* Put a previously withheld segment in the socket's segment queue */
+            chilog(TRACE, "chitcpd_recv_tcp_segment: delivering a withheld segment");
+            pthread_mutex_lock(&entry->lock_withheld_segments);
+            withheld_segment = entry->withheld_segments;
+            if(withheld_segment)
+                DL_DELETE(entry->withheld_segments, entry->withheld_segments);
+            pthread_mutex_unlock(&entry->lock_withheld_segments);
         }
 
         /* If DBG_RESP_NONE, none of the previous conditions were triggered, so we deliver the
-         * packet as usual. If DBG_RESP_DRAW_WITHHELD, we still need to deliver the packet
-         * (but we *may* have an additional one in additional_packet. If DBG_RESP_DUPLICATE,
-         * we deliver the packet, and the duplicate will be delivered at a later time (it
-         * is currently sitting in the withheld_packets list).
+         * segment as usual. If DBG_RESP_DRAW_WITHHELD, we still need to deliver the segment
+         * (but we *may* have an additional one in additional_segment. If DBG_RESP_DUPLICATE,
+         * we deliver the segment, and the duplicate will be delivered at a later time (it
+         * is currently sitting in the withheld_segments list).
          */
         if (r == DBG_RESP_NONE || r == DBG_RESP_DRAW_WITHHELD || r == DBG_RESP_DUPLICATE)
         {
-            if(si->latency > 0.0)
+            /* If there is no latency, we don't need to put the segment in the delivery
+             * queue, and can just deliver it directly. However, if the delivery queue
+             * already contains segments for the same connection (e.g., a withheld segment
+             * that was drawn when the socket changed state; see chitcpd_draw_withheld_segment),
+             * we must queue this segment too, so it doesn't overtake them. */
+            if(si->latency > 0.0 || chitcpd_delivery_queue_has_segments(si, &local_addr, &remote_addr))
             {
-                chitcpd_queue_packet_delivery(si, entry, tcp_packet, &local_addr, &remote_addr, MINLOG_RCVD);
+                chitcpd_queue_segment_delivery(si, tcp_segment, &local_addr, &remote_addr, MINLOG_RCVD);
             }
             else
             {
-                /* No need to put the packet in the delivery queue; just deliver the packet */
-                chitcpd_deliver_packet(si, entry, tcp_packet, &local_addr, &remote_addr, MINLOG_RCVD);
+                chitcpd_deliver_segment(si, entry, tcp_segment, &local_addr, &remote_addr, MINLOG_RCVD);
             }
 
 
-            /* If there is an additional packet, we actually need to look up its socket
-             * again. The reason for this is that this packet may have been withheld when
+            /* If there is an additional segment, we actually need to look up its socket
+             * again. The reason for this is that this segment may have been withheld when
              * being processed by a passive socket, but an active socket may have been
-             * created since the packet was withheld (e.g., in the case of duplicate SYNs)
+             * created since the segment was withheld (e.g., in the case of duplicate SYNs)
              */
-            if (withheld_packet)
+            if (withheld_segment)
             {
-                /* Get entry of socket that will receive this packet */
-                chisocketentry_t *withheld_entry = chitcpd_lookup_socket(si, (struct sockaddr *) &withheld_packet->local_addr, (struct sockaddr *) &withheld_packet->remote_addr, FALSE);
-
                 if(si->latency > 0.0)
                 {
-                    chitcpd_queue_packet_delivery(si, withheld_entry, withheld_packet->packet,
-                                                  &withheld_entry->local_addr, &withheld_entry->remote_addr,
-                                                  withheld_packet->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
+                    chitcpd_queue_segment_delivery(si, withheld_segment->segment,
+                                                  &withheld_segment->local_addr, &withheld_segment->remote_addr,
+                                                  withheld_segment->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
                 }
                 else
                 {
-                    chitcpd_deliver_packet(si, withheld_entry, withheld_packet->packet,
-                                           &withheld_entry->local_addr, &withheld_entry->remote_addr,
-                                           withheld_packet->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
+                    chitcpd_lookup_and_deliver_segment(si, withheld_segment->segment,
+                                                      &withheld_segment->local_addr, &withheld_segment->remote_addr,
+                                                      withheld_segment->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
                 }
 
-                free(withheld_packet);
+                free(withheld_segment);
             }
         }
 
     }
+
+    chitcpd_release_socket(si, entry);
 
     return CHITCP_OK;
 }
@@ -690,12 +705,11 @@ int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct s
 #define SECOND (1000000000L)
 #define SECOND_F (1000000000.0)
 
-void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
+void chitcpd_queue_segment_delivery(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
 {
-    packet_delivery_list_entry_t *delivery_entry = malloc(sizeof(packet_delivery_list_entry_t));
+    segment_delivery_list_entry_t *delivery_entry = malloc(sizeof(segment_delivery_list_entry_t));
 
-    delivery_entry->entry = entry;
-    delivery_entry->tcp_packet = tcp_packet;
+    delivery_entry->tcp_segment = tcp_segment;
     delivery_entry->log_prefix = log_prefix;
     memcpy(&delivery_entry->local_addr, local_addr, sizeof(struct sockaddr_storage));
     memcpy(&delivery_entry->remote_addr, remote_addr, sizeof(struct sockaddr_storage));
@@ -718,27 +732,125 @@ void chitcpd_queue_packet_delivery(serverinfo_t *si, chisocketentry_t *entry, tc
     pthread_mutex_unlock(&si->lock_delivery);
 }
 
-void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
+/* See connection.h */
+void chitcpd_draw_withheld_segment(serverinfo_t *si, chisocketentry_t *entry)
+{
+    withheld_tcp_segment_t *withheld_segment;
+
+    pthread_mutex_lock(&entry->lock_withheld_segments);
+    withheld_segment = entry->withheld_segments;
+    if(withheld_segment)
+        DL_DELETE(entry->withheld_segments, withheld_segment);
+    pthread_mutex_unlock(&entry->lock_withheld_segments);
+
+    if(!withheld_segment)
+    {
+        chilog(TRACE, "chitcpd_draw_withheld_segment: no withheld segments to deliver");
+        return;
+    }
+
+    chilog(TRACE, "chitcpd_draw_withheld_segment: delivering a withheld segment");
+
+    /* We always go through the delivery queue (even if there is no latency)
+     * because this function may be called from a socket's TCP thread, which
+     * could be holding locks that chitcpd_deliver_segment needs to acquire.
+     * As in chitcpd_recv_tcp_segment, the socket that will receive the segment
+     * is looked up again when the segment is delivered. */
+    chitcpd_queue_segment_delivery(si, withheld_segment->segment,
+                                  &withheld_segment->local_addr, &withheld_segment->remote_addr,
+                                  withheld_segment->duplicate? MINLOG_RCVD_DUPLD : MINLOG_RCVD_DELAYED);
+
+    free(withheld_segment);
+}
+
+/*
+ * chitcpd_delivery_queue_has_segments - Check whether there are queued segments for a connection
+ *
+ * si: Server info
+ *
+ * local_addr, remote_addr: Addresses of the connection
+ *
+ * Returns: TRUE if the delivery queue contains segments for the connection
+ *          (including any segment that is currently being delivered), FALSE otherwise
+ */
+bool_t chitcpd_delivery_queue_has_segments(serverinfo_t *si, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr)
+{
+    segment_delivery_list_entry_t *elt;
+    bool_t found = FALSE;
+
+    /* Note: the delivery thread holds this lock while delivering a segment, and
+     * only removes the segment from the queue once it has been delivered */
+    pthread_mutex_lock(&si->lock_delivery);
+    DL_FOREACH(si->delivery_queue, elt)
+    {
+        if(!chitcp_addr_cmp((struct sockaddr *) &elt->local_addr, (struct sockaddr *) local_addr) &&
+           !chitcp_addr_port_cmp((struct sockaddr *) &elt->local_addr, (struct sockaddr *) local_addr) &&
+           !chitcp_addr_cmp((struct sockaddr *) &elt->remote_addr, (struct sockaddr *) remote_addr) &&
+           !chitcp_addr_port_cmp((struct sockaddr *) &elt->remote_addr, (struct sockaddr *) remote_addr))
+        {
+            found = TRUE;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&si->lock_delivery);
+
+    return found;
+}
+
+/*
+ * chitcpd_lookup_and_deliver_segment - Deliver a segment to the socket that matches its addresses
+ *
+ * If no socket matches the segment's addresses (e.g., because the socket was
+ * freed while the segment was in the delivery queue), the segment is dropped.
+ *
+ * si: Server info
+ *
+ * tcp_segment: Segment to deliver
+ *
+ * local_addr, remote_addr: Addresses of the segment
+ *
+ * log_prefix: Prefix to use when logging the segment
+ *
+ * Returns: Nothing
+ */
+void chitcpd_lookup_and_deliver_segment(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
+{
+    chisocketentry_t *entry = chitcpd_lookup_socket(si, (struct sockaddr *) local_addr, (struct sockaddr *) remote_addr, FALSE);
+
+    if(entry == NULL)
+    {
+        chilog(DEBUG, "Dropping segment: no socket to deliver it to (it may have been closed)");
+        chitcp_tcp_segment_free(tcp_segment);
+        free(tcp_segment);
+        return;
+    }
+
+    chitcpd_deliver_segment(si, entry, tcp_segment, local_addr, remote_addr, log_prefix);
+
+    chitcpd_release_socket(si, entry);
+}
+
+void chitcpd_deliver_segment(serverinfo_t *si, chisocketentry_t *entry, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *remote_addr, char* log_prefix)
 {
     chilog_tcp_minimal((struct sockaddr *) remote_addr,
                        (struct sockaddr *) local_addr,
                        SOCKET_NO(si, entry),
-                       tcp_packet,
+                       tcp_segment,
                        log_prefix);
 
-    chitcpd_pcap_packet(si, tcp_packet, remote_addr, local_addr);
+    chitcpd_pcap_packet(si, tcp_segment, remote_addr, local_addr);
 
     /* We need to treat this differently depending on whether the socket is active or passive */
     if(entry->actpas_type == SOCKET_ACTIVE)
     {
         active_chisocket_state_t *socket_state = &entry->socket_state.active;
 
-        /* Put the packet in the socket's packet queue */
-        pthread_mutex_lock(&socket_state->tcp_data.lock_pending_packets);
-        chitcp_packet_list_append(&socket_state->tcp_data.pending_packets, tcp_packet);
-        pthread_mutex_unlock(&socket_state->tcp_data.lock_pending_packets);
+        /* Put the segment in the socket's segment queue */
+        pthread_mutex_lock(&socket_state->tcp_data.lock_pending_segments);
+        chitcp_segment_list_append(&socket_state->tcp_data.pending_segments, tcp_segment);
+        pthread_mutex_unlock(&socket_state->tcp_data.lock_pending_segments);
 
-        /* Notify the socket that there is a pending packet (or packets) */
+        /* Notify the socket that there is a pending segment (or segments) */
         pthread_mutex_lock(&entry->socket_state.active.lock_event);
         entry->socket_state.active.flags.net_recv = 1;
         pthread_cond_broadcast(&entry->socket_state.active.cv_event);
@@ -746,24 +858,24 @@ void chitcpd_deliver_packet(serverinfo_t *si, chisocketentry_t *entry, tcp_packe
     }
     else if (entry->actpas_type == SOCKET_PASSIVE)
     {
-        /* If the socket is passive, this means the packet is probably
-         * a SYN packet that is initiating a three-way handshake.
+        /* If the socket is passive, this means the segment is probably
+         * a SYN segment that is initiating a three-way handshake.
          * However, it is not our responsibility to check this. We
-         * simply enqueue the packet as a "pending connection"
-         * in the passive socket; if it is a SYN packet, it will spawn
+         * simply enqueue the segment as a "pending connection"
+         * in the passive socket; if it is a SYN segment, it will spawn
          * an active socket next time the application layer calls
          * chisocket_accept()
          */
-        tcphdr_t *header = (tcphdr_t*) tcp_packet->raw;
+        tcphdr_t *header = (tcphdr_t*) tcp_segment->raw;
 
-        chilog(DEBUG, "Received packet for passive socket %i (port %i)", SOCKET_NO(si, entry), chitcp_ntohs(header->dest));
+        chilog(DEBUG, "Received segment for passive socket %i (port %i)", SOCKET_NO(si, entry), chitcp_ntohs(header->dest));
 
         passive_chisocket_state_t *socket_state = &entry->socket_state.passive;
-        chilog(DEBUG, "Enqueueing packet as pending connection in passive socket");
+        chilog(DEBUG, "Enqueueing segment as pending connection in passive socket");
 
         /* Create pending connection */
         pending_connection_t *pending_connection = calloc(1, sizeof(pending_connection_t));
-        pending_connection->initial_packet = tcp_packet;
+        pending_connection->initial_segment = tcp_segment;
         memcpy(&pending_connection->local_addr, local_addr, sizeof(struct sockaddr_storage));
         memcpy(&pending_connection->remote_addr, remote_addr, sizeof(struct sockaddr_storage));
 
@@ -814,7 +926,7 @@ struct iphdr
   } __attribute__ ((packed)) ;
 typedef struct iphdr iphdr_t;
 
-int chitcpd_pcap_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct sockaddr_storage *local_addr, struct sockaddr_storage *peer_addr)
+int chitcpd_pcap_packet(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr_storage *local_addr, struct sockaddr_storage *peer_addr)
 {
     if (si->libpcap_file != NULL) {
         pcaprec_hdr_t pcap_header;
@@ -822,7 +934,7 @@ int chitcpd_pcap_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct socka
         clock_gettime(CLOCK_REALTIME, &spec);
         pcap_header.ts_sec = spec.tv_sec;
         pcap_header.ts_nsec = spec.tv_nsec;
-        pcap_header.incl_len = sizeof(iphdr_t) + tcp_packet->length;
+        pcap_header.incl_len = sizeof(iphdr_t) + tcp_segment->length;
         pcap_header.orig_len = pcap_header.incl_len;
 
         /* TODO: Assumes IPv4 */
@@ -833,14 +945,14 @@ int chitcpd_pcap_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct socka
 
         ip_header.version = 4;
         ip_header.ihl = 5;
-        ip_header.len = htons(20 + tcp_packet->length);
+        ip_header.len = htons(20 + tcp_segment->length);
         ip_header.ttl = 233;
         ip_header.proto = 6;
         ip_header.cksum = cksum(&ip_header, sizeof(iphdr_t));
 
         fwrite(&pcap_header, sizeof(pcaprec_hdr_t), 1, si->libpcap_file);
         fwrite(&ip_header, sizeof(iphdr_t), 1, si->libpcap_file);
-        fwrite(tcp_packet->raw, tcp_packet->length, 1, si->libpcap_file);
+        fwrite(tcp_segment->raw, tcp_segment->length, 1, si->libpcap_file);
         fflush(si->libpcap_file); /* Flush to make sure we get the data out, in case the server is improperly shutdown. */
     }
 

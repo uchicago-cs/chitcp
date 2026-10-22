@@ -12,7 +12,7 @@
 #include <string.h>
 
 #include "chitcp/socket.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include "chitcp/types.h"
 #include "chitcp/addr.h"
 #include "chitcp/utils.h"

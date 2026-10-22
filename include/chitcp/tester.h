@@ -20,7 +20,7 @@ typedef int (*chitcp_tester_runnable)(int sockfd, void *args);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_EINIT: Error initializing the tester
  *
  */
@@ -33,7 +33,7 @@ int chitcp_tester_init(chitcp_tester_t* tester);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *
  */
 int chitcp_tester_free(chitcp_tester_t* tester);
@@ -49,7 +49,7 @@ int chitcp_tester_free(chitcp_tester_t* tester);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_ETHREAD: Could not create thread
  */
 int chitcp_tester_start(chitcp_tester_t* tester);
@@ -95,8 +95,9 @@ int chitcp_tester_client_set_debug(chitcp_tester_t* tester, debug_event_handler 
  * tcp_state: TCP state
  *
  * Returns:
- *  - CHITCP_OK: Debug handler set correctly
- *  - CHITCP_EINVAL: Invalid parameter value
+ *  - CHITCP_OK: The socket reached the requested TCP state
+ *  - CHITCP_EINVAL: Invalid parameter value (invalid socket or TCP state)
+ *  - CHITCP_ENOENT: The socket was closed before reaching the requested TCP state
  */
 int chitcp_tester_server_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state);
 
@@ -116,7 +117,7 @@ int chitcp_tester_client_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_ESYNC: Unable to signal server thread
  */
 int chitcp_tester_server_listen(chitcp_tester_t* tester);
@@ -130,7 +131,7 @@ int chitcp_tester_server_listen(chitcp_tester_t* tester);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_ESYNC: Unable to signal server thread
  */
 int chitcp_tester_server_accept(chitcp_tester_t* tester);
@@ -144,7 +145,7 @@ int chitcp_tester_server_accept(chitcp_tester_t* tester);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_ESYNC: Unable to signal client thread
  */
 int chitcp_tester_client_connect(chitcp_tester_t* tester);
@@ -188,7 +189,7 @@ int chitcp_tester_server_run(chitcp_tester_t* tester);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_ESYNC: Unable to signal client thread
  */
 int chitcp_tester_client_close(chitcp_tester_t* tester);
@@ -202,7 +203,7 @@ int chitcp_tester_client_close(chitcp_tester_t* tester);
  * tester: Tester data structure
  *
  * Returns:
- *  - CHITCP_OK: Packet was processed correctly
+ *  - CHITCP_OK: Operation completed successfully
  *  - CHITCP_ESYNC: Unable to signal client thread
  */
 int chitcp_tester_server_close(chitcp_tester_t* tester);

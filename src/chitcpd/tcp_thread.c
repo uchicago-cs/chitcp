@@ -9,12 +9,12 @@
  *
  *  Note how, in general, the chisocket layer never runs the TCP protocol;
  *  instead, it modifies the tcp_data field of an active socket (e.g., by
- *  enqueueing a new packet that arrived through the network), and notifies
+ *  enqueueing a new segment that arrived through the network), and notifies
  *  the TCP thread that it needs to wake up and handle this change in the
  *  TCP data.
  *
  *  The actual implementation of the TCP protocol is in tcp.c, and the code
- *  in this file only handles the dispatch of events and packets to the
+ *  in this file only handles the dispatch of events and segments to the
  *  appropriate functions in tcp.c.
  *
  */
@@ -58,7 +58,7 @@
 #include "serverinfo.h"
 #include "connection.h"
 #include "tcp_thread.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include "chitcp/types.h"
 #include "chitcp/log.h"
 #include "chitcp/debug_api.h"
@@ -111,6 +111,11 @@ void chilog_tcp_data(loglevel_t level, tcp_data_t *tcp_data, tcp_state_t state)
     rcv_buf_size = circular_buffer_count(&tcp_data->recv);
     rcv_buf_capacity = circular_buffer_capacity(&tcp_data->recv);
 
+    /* The network thread can add segments to this list at any time */
+    pthread_mutex_lock(&tcp_data->lock_pending_segments);
+    int num_pending = chitcp_segment_list_size(tcp_data->pending_segments);
+    pthread_mutex_unlock(&tcp_data->lock_pending_segments);
+
     flockfile(stdout);
     chilog(level, "   ······················································");
     chilog(level, "                         %s", tcp_str(state));
@@ -121,7 +126,7 @@ void chilog_tcp_data(loglevel_t level, tcp_data_t *tcp_data, tcp_state_t state)
     chilog(level, "        SND.WND:  %10u       RCV.WND:  %10u ", tcp_data->SND_WND, tcp_data->RCV_WND);
     chilog(level, "    Send Buffer: %4u / %4u   Recv Buffer: %4u / %4u", snd_buf_size, snd_buf_capacity, rcv_buf_size, rcv_buf_capacity);
     chilog(level, "");
-    chilog(level, "       Pending packets: %4u    Closing? %s", chitcp_packet_list_size(tcp_data->pending_packets), tcp_data->closing?"YES":"NO");
+    chilog(level, "       Pending segments: %4u    Closing? %s", num_pending, tcp_data->closing?"YES":"NO");
     chilog(level, "   ······················································");
     funlockfile(stdout);
 }
@@ -189,7 +194,9 @@ typedef struct tcp_thread_args
  *
  * entry: Pointer to socket entry for which a TCP thread is being started
  *
- * Returns: TODO
+ * Returns:
+ *  - CHITCP_OK: TCP thread started correctly
+ *  - CHITCP_ETHREAD: Could not create the TCP thread
  *
  */
 int chitcpd_tcp_start_thread(serverinfo_t *si, chisocketentry_t *entry)
@@ -199,10 +206,18 @@ int chitcpd_tcp_start_thread(serverinfo_t *si, chisocketentry_t *entry)
     tta->entry = entry;
     snprintf (tta->thread_name, 16, "tcp-socket-%d", ptr_to_fd(si, entry));
 
-    if (pthread_create(&entry->socket_state.active.tcp_thread, NULL, chitcpd_tcp_thread_func, tta) < 0)
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    si->num_tcp_threads++;
+    pthread_mutex_unlock(&si->lock_chisocket_table);
+
+    if (pthread_create(&entry->socket_state.active.tcp_thread, NULL, chitcpd_tcp_thread_func, tta) != 0)
     {
         perror("Could not create TCP thread");
         free(tta);
+        pthread_mutex_lock(&si->lock_chisocket_table);
+        si->num_tcp_threads--;
+        pthread_cond_broadcast(&si->cv_chisocket_table);
+        pthread_mutex_unlock(&si->lock_chisocket_table);
         return CHITCP_ETHREAD;
     }
 
@@ -215,7 +230,7 @@ int chitcpd_tcp_start_thread(serverinfo_t *si, chisocketentry_t *entry)
  *
  * args: arguments (in tcp_thread_args_t)
  *
- * Returns: TODO
+ * Returns: Always returns NULL
  *
  */
 void* chitcpd_tcp_thread_func(void *args)
@@ -249,11 +264,13 @@ void* chitcpd_tcp_thread_func(void *args)
      *
      * - app_send: The application has called chisocket_send()
      *
-     * - net_recv: A packet has arrived over the network
+     * - net_recv: A segment has arrived over the network
      *
      * - cleanup: The thread must release its resources and exit
      *
-     * - timeout: A timeout has expired and the TCP thread must handle it.
+     * - timeout_rtx: The retransmission timer has expired
+     *
+     * - timeout_pst: The persist timer has expired
      *
      * Once an event is received, we clear the corresponding bit in the flags,
      * and release the lock on the flags. This means that, while the event is being
@@ -279,6 +296,12 @@ void* chitcpd_tcp_thread_func(void *args)
 
             /* Cleanup can only happen in the CLOSED state */
             assert(entry->tcp_state == CLOSED);
+
+            /* We must release the event lock before freeing the socket entry:
+             * chitcpd_free_socket_entry waits for other threads using the entry
+             * to release it, and they may need this lock (e.g., the network thread
+             * signalling the arrival of a segment). */
+            pthread_mutex_unlock(&socket_state->lock_event);
 
             chitcpd_dispatch_tcp(si, entry, CLEANUP);
             chitcpd_free_socket_entry(si, entry);
@@ -324,10 +347,13 @@ void* chitcpd_tcp_thread_func(void *args)
             socket_state->flags.net_recv = 0;
             pthread_mutex_unlock(&socket_state->lock_event);
 
-            chitcpd_dispatch_tcp(si, entry, PACKET_ARRIVAL);
+            chitcpd_dispatch_tcp(si, entry, SEGMENT_ARRIVAL);
 
-            /* If there are more packets to process, set net_recv to 1 again */
-            if(socket_state->tcp_data.pending_packets != NULL)
+            /* If there are more segments to process, set net_recv to 1 again */
+            pthread_mutex_lock(&socket_state->tcp_data.lock_pending_segments);
+            bool_t more_segments = (socket_state->tcp_data.pending_segments != NULL);
+            pthread_mutex_unlock(&socket_state->tcp_data.lock_pending_segments);
+            if(more_segments)
             {
                 pthread_mutex_lock(&socket_state->lock_event);
                 socket_state->flags.net_recv = 1;
@@ -354,5 +380,11 @@ void* chitcpd_tcp_thread_func(void *args)
     }
 
     chilog(DEBUG, "TCP thread is exiting.");
+
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    si->num_tcp_threads--;
+    pthread_cond_broadcast(&si->cv_chisocket_table);
+    pthread_mutex_unlock(&si->lock_chisocket_table);
+
     return NULL;
 }

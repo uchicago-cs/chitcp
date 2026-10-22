@@ -204,7 +204,7 @@ int circular_buffer_set_seq_initial(circular_buffer_t *buf, uint32_t seq_initial
  *
  * Reads (and removes) at most "len" bytes from the
  * buffer, and stores them in "dst". If the buffer has
- * less that "len" bytes in it, those bytes are
+ * fewer than "len" bytes in it, those bytes are
  * returned immediately (the function does *not* block
  * until "len" bytes are available on the buffer)
  *
@@ -268,15 +268,16 @@ int circular_buffer_peek_at(circular_buffer_t *buf, uint8_t *dst, uint32_t at, u
 /*
  * circular_buffer_write - Write data into the buffer
  *
- * Writes from "dst" into the buffer. The number of bytes
- * written will be the maximum of "len" and the
+ * Writes from "data" into the buffer. The number of bytes
+ * written will be the minimum of "len" and the
  * maximum capacity of the buffer.
  *
  * If the buffer does not have enough space to complete
  * the operation, and "blocking" is true, it will write
  * as many bytes as necessary to fill the buffer and will
  * then block until space becomes available. If "blocking"
- * is false, CHITCP_EWOULDBLOCK is returned.
+ * is false, no bytes are written and CHITCP_EWOULDBLOCK
+ * is returned.
  *
  * If the buffer is closed (using circular_buffer_close)
  * while the function is blocked, the function returns
@@ -285,14 +286,17 @@ int circular_buffer_peek_at(circular_buffer_t *buf, uint8_t *dst, uint32_t at, u
  *
  * buf: circular_buffer_t struct
  *
- * dst: Array containing data to write.
+ * data: Array containing data to write.
  *
  * len: Maximum number of bytes to write.
  *
  * blocking: True if the function should block, False otherwise.
  *
  * Returns:
- *  - Number of bytes written
+ *  - Number of bytes written, or
+ *  - CHITCP_EWOULDBLOCK: "blocking" is false and there is not
+ *    enough space in the buffer to write "len" bytes
+ *  - CHITCP_EINVAL: "len" is zero
  *
  */
 int circular_buffer_write(circular_buffer_t *buf, uint8_t *data, uint32_t len, bool_t blocking);

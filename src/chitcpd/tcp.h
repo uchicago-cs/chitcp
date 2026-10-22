@@ -40,7 +40,7 @@
  */
 
 #include "chitcp/buffer.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include "chitcp/multitimer.h"
 
 #ifndef TCP_H_
@@ -57,7 +57,7 @@ typedef enum
     APPLICATION_SEND    = 2,
     APPLICATION_RECEIVE = 3,
     APPLICATION_CLOSE   = 4,
-    PACKET_ARRIVAL      = 5,
+    SEGMENT_ARRIVAL      = 5,
     TIMEOUT_RTX         = 6,
     TIMEOUT_PST         = 7,
     CLEANUP             = 8
@@ -104,7 +104,7 @@ static char *tcp_event_type_names[] =
     "APPLICATION_SEND",
     "APPLICATION_RECEIVE",
     "APPLICATION_CLOSE",
-    "PACKET_ARRIVAL",
+    "SEGMENT_ARRIVAL",
     "TIMEOUT_RTX",
     "TIMEOUT_PST",
     "CLEANUP"
@@ -118,13 +118,17 @@ static inline char *tcp_event_str (tcp_event_type_t evt)
 
 /* TCP data. Roughly corresponds to the variables and buffers
  * one would expect in a Transmission Control Block (as
- * specified in RFC 9293). */
+ * specified in RFC 9293).
+ *
+ * You can add any additional fields you need to this struct
+ * (make sure to initialize them in tcp_data_init and to free
+ * them in tcp_data_free, in tcp.c) */
 typedef struct tcp_data
 {
-    /* Queue with pending packets received from the network */
-    tcp_packet_list_t *pending_packets;
-    pthread_mutex_t lock_pending_packets;
-    pthread_cond_t cv_pending_packets;
+    /* Queue with pending segments received from the network */
+    tcp_segment_list_t *pending_segments;
+    pthread_mutex_t lock_pending_segments;
+    pthread_cond_t cv_pending_segments;
 
     /* Transmission control block */
 

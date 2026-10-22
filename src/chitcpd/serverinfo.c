@@ -48,11 +48,12 @@
 #include "chitcp/log.h"
 #include "chitcp/chitcpd.h"
 #include "breakpoint.h"
+#include "connection.h"
 
 
 
 /*
- * chitcpd_set_header_ports - Set the TCP ports on a packet, based on the local/remote
+ * chitcpd_set_header_ports - Set the TCP ports on a segment, based on the local/remote
  *                            addresses in a socket entry.
  *
  * Note: This only makes sense in active sockets.
@@ -73,14 +74,14 @@ void chitcpd_set_header_ports(chisocketentry_t *entry, tcphdr_t *header)
 }
 
 /* See serverinfo.h */
-int chitcpd_tcp_packet_create(chisocketentry_t *entry, tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len)
+int chitcpd_tcp_segment_create(chisocketentry_t *entry, tcp_segment_t *segment, const uint8_t* payload, uint16_t payload_len)
 {
-    int packet_len;
+    int segment_len;
 
-    packet_len = chitcp_tcp_packet_init(packet, payload, payload_len);
-    chitcpd_set_header_ports(entry, TCP_PACKET_HEADER(packet));
+    segment_len = chitcp_tcp_segment_init(segment, payload, payload_len);
+    chitcpd_set_header_ports(entry, TCP_SEGMENT_HEADER(segment));
 
-    return packet_len;
+    return segment_len;
 }
 
 /* See serverinfo.h */
@@ -92,9 +93,16 @@ void chitcpd_update_tcp_state(serverinfo_t *si, chisocketentry_t *entry, tcp_sta
     entry->tcp_state = newstate;
     pthread_cond_broadcast(&entry->cv_tcp_state);
 
-    chitcpd_debug_breakpoint(si, ptr_to_fd(si, entry), DBG_EVT_TCP_STATE_CHANGE, -1);
+    enum chitcpd_debug_response r =
+        chitcpd_debug_breakpoint(si, ptr_to_fd(si, entry), DBG_EVT_TCP_STATE_CHANGE, -1);
 
     pthread_mutex_unlock(&entry->lock_tcp_state);
+
+    /* A debug handler can ask for a withheld segment to be delivered once
+     * the socket has transitioned to a given state (e.g., to only deliver
+     * a FIN once the socket has entered FIN_WAIT_1) */
+    if (r == DBG_RESP_DRAW_WITHHELD)
+        chitcpd_draw_withheld_segment(si, entry);
 
     if (newstate == CLOSED && entry->actpas_type == SOCKET_ACTIVE)
     {
@@ -164,9 +172,9 @@ int chitcpd_allocate_socket(serverinfo_t *si, int *socket_index)
         entry->actpas_type = SOCKET_UNINITIALIZED;
         entry->tcp_state = CLOSED;
 
-        entry->withheld_packets = NULL;
+        entry->withheld_segments = NULL;
 
-        pthread_mutex_init(&entry->lock_withheld_packets, NULL);
+        pthread_mutex_init(&entry->lock_withheld_segments, NULL);
         pthread_mutex_init(&entry->lock_tcp_state, NULL);
         pthread_cond_init(&entry->cv_tcp_state, NULL);
 
@@ -181,6 +189,29 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
 {
     uint16_t port;
     struct sockaddr *addr;
+
+    /* Make sure no other thread can look up this socket from now on,
+     * and wait for any threads that are currently using it (e.g., the
+     * network thread may be in the middle of delivering a segment to it) */
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    pthread_mutex_lock(&entry->lock_tcp_state);
+    if(entry->actpas_type == SOCKET_PASSIVE)
+        pthread_mutex_lock(&entry->socket_state.passive.lock_pending_connections);
+    entry->freeing = TRUE;
+    /* Wake up any threads waiting for this socket to change state
+     * (e.g., in the CONNECT, CLOSE, or WAIT_FOR_STATE handlers) or
+     * waiting for a pending connection (in the ACCEPT handler), so
+     * they can release the entry */
+    pthread_cond_broadcast(&entry->cv_tcp_state);
+    if(entry->actpas_type == SOCKET_PASSIVE)
+    {
+        pthread_cond_broadcast(&entry->socket_state.passive.cv_pending_connections);
+        pthread_mutex_unlock(&entry->socket_state.passive.lock_pending_connections);
+    }
+    pthread_mutex_unlock(&entry->lock_tcp_state);
+    while(entry->refcount > 0)
+        pthread_cond_wait(&si->cv_chisocket_table, &si->lock_chisocket_table);
+    pthread_mutex_unlock(&si->lock_chisocket_table);
 
     if(entry->actpas_type == SOCKET_PASSIVE)
     {
@@ -206,27 +237,24 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
 
         tcp_data_free(si, entry);
 
-        pthread_mutex_unlock(&socket_state->lock_event);
         pthread_mutex_destroy(&socket_state->lock_event);
         pthread_cond_destroy(&socket_state->cv_event);
     }
 
-    withheld_tcp_packet_list_t *elt, *tmp;
+    withheld_tcp_segment_list_t *elt, *tmp;
 
-    DL_FOREACH_SAFE(entry->withheld_packets,elt,tmp)
+    DL_FOREACH_SAFE(entry->withheld_segments,elt,tmp)
     {
-        DL_DELETE(entry->withheld_packets,elt);
+        DL_DELETE(entry->withheld_segments,elt);
         free(elt);
     }
 
-    pthread_mutex_destroy(&entry->lock_withheld_packets);
+    pthread_mutex_destroy(&entry->lock_withheld_segments);
     pthread_mutex_destroy(&entry->lock_tcp_state);
     pthread_cond_destroy(&entry->cv_tcp_state);
 
-    if (entry->debug_monitor != NULL)
-    {
-        chitcpd_debug_detach_monitor(entry);
-    }
+    /* Does nothing if the entry has no debug monitor */
+    chitcpd_debug_detach_monitor(entry);
     pthread_mutex_destroy(&entry->lock_debug_monitor);
 
     /* Mark local port as available */
@@ -234,9 +262,12 @@ int chitcpd_free_socket_entry(serverinfo_t *si, chisocketentry_t *entry)
     if ((port = chitcp_ntohs(chitcp_get_addr_port(addr))) >= 0)
         si->port_table[port] = NULL;
 
+    /* The entry is cleared while holding the socket table lock, so that
+     * chitcpd_lookup_socket never sees a partially cleared entry */
+    pthread_mutex_lock(&si->lock_chisocket_table);
     memset(entry, 0, sizeof(chisocketentry_t));
-
     entry->available = TRUE;
+    pthread_mutex_unlock(&si->lock_chisocket_table);
 
     chilog(TRACE, "Finished freeing entry for socket %i", SOCKET_NO(si, entry));
 
@@ -273,12 +304,15 @@ chisocketentry_t* chitcpd_lookup_socket(serverinfo_t *si, struct sockaddr *local
 
     int max_nwildcards = 3;
     chisocketentry_t *match = NULL;
+
+    pthread_mutex_lock(&si->lock_chisocket_table);
+
     for(int i=0; i < si->chisocket_table_size; i++)
     {
         chisocketentry_t *this_entry = &si->chisocket_table[i];
         int nwildcards = 0;
 
-        if(this_entry->available)
+        if(this_entry->available || this_entry->freeing)
             continue;
 
         /* If the families differ, this is not the socket we're looking for */
@@ -339,5 +373,40 @@ chisocketentry_t* chitcpd_lookup_socket(serverinfo_t *si, struct sockaddr *local
         }
     }
 
+    if(match)
+        match->refcount++;
+
+    pthread_mutex_unlock(&si->lock_chisocket_table);
+
     return match;
+}
+
+/* See serverinfo.h */
+chisocketentry_t* chitcpd_acquire_socket(serverinfo_t *si, int sockfd)
+{
+    chisocketentry_t *entry = NULL;
+
+    if(sockfd < 0 || sockfd >= si->chisocket_table_size)
+        return NULL;
+
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    if(!si->chisocket_table[sockfd].available && !si->chisocket_table[sockfd].freeing)
+    {
+        entry = &si->chisocket_table[sockfd];
+        entry->refcount++;
+    }
+    pthread_mutex_unlock(&si->lock_chisocket_table);
+
+    return entry;
+}
+
+/* See serverinfo.h */
+void chitcpd_release_socket(serverinfo_t *si, chisocketentry_t *entry)
+{
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    assert(entry->refcount > 0);
+    entry->refcount--;
+    if(entry->refcount == 0)
+        pthread_cond_broadcast(&si->cv_chisocket_table);
+    pthread_mutex_unlock(&si->lock_chisocket_table);
 }

@@ -13,8 +13,8 @@ unreliable_data_transfer::random_drop_025_3
 unreliable_data_transfer::random_drop_025_2
 unreliable_data_transfer::random_drop_025_1
 unreliable_data_transfer::go_back_n
-unreliable_data_transfer::drop_single_packet
-unreliable_data_transfer::drop_multiple_packets
+unreliable_data_transfer::drop_single_segment
+unreliable_data_transfer::drop_multiple_segments
 unreliable_conn_term::drop_fin_2
 unreliable_conn_term::drop_fin_1
 unreliable_conn_init::drop_synack

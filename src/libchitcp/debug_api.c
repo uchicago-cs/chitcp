@@ -77,8 +77,8 @@ struct active_thread_args
 static char *event_names[] =
 {
     "TCP_STATE_CHANGE",
-    "INCOMING_PACKET",
-    "OUTGOING_PACKET",
+    "INCOMING_SEGMENT",
+    "OUTGOING_SEGMENT",
     "PENDING_CONNECTION",
     "KILL"
 };

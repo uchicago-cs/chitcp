@@ -3,12 +3,15 @@
  *
  *  main() function for chiTCP daemon (chitcpd)
  *
- *  The chitcpd executable accepts three command-line arguments:
+ *  The chitcpd executable accepts the following command-line arguments:
  *
  *  -p PORT: The daemon's TCP port (default: 23300)
  *  -s FILE: The UNIX socket where local applications will be able to
  *           send requests to the chiTCP daemon
- *  -v: Be verbose. Can be repeated up to three times for extra verbosity.
+ *           (default: /tmp/chitcpd.socket.LOGIN, where LOGIN is your login)
+ *  -c FILE: Write all the chiTCP packets sent and received by the daemon
+ *           to a pcap file
+ *  -v: Be verbose. Can be repeated up to four times for extra verbosity.
  *
  *  The main() function mostly takes care of processing the command-line
  *  arguments. Next, server.c takes care of setting up the various threads
@@ -95,7 +98,7 @@ int main(int argc, char *argv[])
             verbosity++;
             break;
         case 'h':
-            printf("Usage: chitcpd [-p PORT] [-s UNIX_SOCKET] [(-v|-vv|-vvv|-vvvv)]\n");
+            printf("Usage: chitcpd [-p PORT] [-s UNIX_SOCKET] [-c PCAP_FILE] [(-v|-vv|-vvv|-vvvv)]\n");
             exit(0);
         default:
             printf("ERROR: Unknown option -%c\n", opt);

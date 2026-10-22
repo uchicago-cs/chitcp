@@ -11,7 +11,7 @@
  *  WARNING: A warning
  *  INFO: High-level information about the progress of the application
  *  DEBUG: Lower-level information
- *  TRACE: Very low-level information, such as raw dumps of TCP packets.
+ *  TRACE: Very low-level information, such as raw dumps of TCP segments.
  *
  */
 
@@ -50,7 +50,7 @@
 #ifndef CHITCP_LOG_H_
 #define CHITCP_LOG_H_
 
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include <netinet/in.h>
 
 /* Log levels */
@@ -64,7 +64,7 @@ typedef enum {
     TRACE    = 70
 } loglevel_t;
 
-/* Log prefixes when dumping the contents of packets */
+/* Log prefixes when dumping the contents of segments */
 #define LOG_INBOUND ('<')
 #define LOG_OUTBOUND ('>')
 #define LOG_NO_DIRECTION ('|')
@@ -104,21 +104,21 @@ void chitcp_setloglevel(loglevel_t level);
 void chilog(loglevel_t level, char *fmt, ...);
 
 /*
- * chilog_tcp - Print the header and payload of a TCP packet
+ * chilog_tcp - Print the header and payload of a TCP segment
  *
  * level: Logging level
  *
- * packet: TCP packet
+ * segment: TCP segment
  *
  * prefix: Prefix added to log messages (useful to indicate the "direction"
- *         of the packet: LOG_INBOUND or LOG_OUTBOUND)
+ *         of the segment: LOG_INBOUND or LOG_OUTBOUND)
  *
  * Returns: nothing.
  */
-void chilog_tcp(loglevel_t level, tcp_packet_t *packet, char prefix);
+void chilog_tcp(loglevel_t level, tcp_segment_t *segment, char prefix);
 
 
-void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, tcp_packet_t *packet, char *prefix);
+void chilog_tcp_minimal(struct sockaddr *src, struct sockaddr *dst, int sockfd, tcp_segment_t *segment, char *prefix);
 
 
 /*

@@ -42,7 +42,7 @@
 #define CONNECTION_H_
 
 #include "serverinfo.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 
 typedef struct connection_thread_args
 {
@@ -54,12 +54,12 @@ typedef struct connection_thread_args
 void* chitcpd_connection_thread_func(void *args);
 
 
-typedef struct packet_delivery_thread_args
+typedef struct segment_delivery_thread_args
 {
     serverinfo_t *si;
-} packet_delivery_thread_args_t;
+} segment_delivery_thread_args_t;
 
-void* chitcpd_packet_delivery_thread_func(void *args);
+void* chitcpd_segment_delivery_thread_func(void *args);
 
 
 tcpconnentry_t* chitcpd_get_connection(serverinfo_t *si, struct sockaddr* addr);
@@ -67,7 +67,21 @@ tcpconnentry_t* chitcpd_create_connection(serverinfo_t *si, struct sockaddr* add
 tcpconnentry_t* chitcpd_add_connection(serverinfo_t *si, socket_t realsocket_send, socket_t realsocket_recv, struct sockaddr* addr);
 int chitcpd_create_connection_thread(serverinfo_t *si, tcpconnentry_t* connection);
 
-int chitcpd_send_tcp_packet(serverinfo_t *si, chisocketentry_t *sock, tcp_packet_t* tcp_packet);
-int chitcpd_recv_tcp_packet(serverinfo_t *si, tcp_packet_t* tcp_packet, struct sockaddr *local_realaddr, struct sockaddr *peer_realaddr);
+int chitcpd_send_tcp_segment(serverinfo_t *si, chisocketentry_t *sock, tcp_segment_t* tcp_segment);
+int chitcpd_recv_tcp_segment(serverinfo_t *si, tcp_segment_t* tcp_segment, struct sockaddr *local_realaddr, struct sockaddr *peer_realaddr);
+
+/*
+ * chitcpd_draw_withheld_segment - Deliver a segment withheld by a debug handler
+ *
+ * Takes the oldest segment in the socket's withheld segments list (if any)
+ * and places it in the delivery queue.
+ *
+ * si: Server info
+ *
+ * entry: Socket entry with the withheld segments list
+ *
+ * Returns: Nothing
+ */
+void chitcpd_draw_withheld_segment(serverinfo_t *si, chisocketentry_t *entry);
 
 #endif /* CONNECTION_H_ */

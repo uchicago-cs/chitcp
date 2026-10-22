@@ -56,10 +56,41 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+/*
+ * The chisocket functions mirror the POSIX socket functions with the
+ * same name (e.g., chisocket_connect behaves like connect), but operate
+ * on chiTCP sockets managed by the chitcpd daemon. Like their POSIX
+ * counterparts, they return -1 and set errno when an error happens.
+ */
+
 extern int chisocket_socket(int domain, int type, int protocol);
 extern int chisocket_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 extern int chisocket_listen(int sockfd, int backlog);
+
+/*
+ * chisocket_connect - Opens a connection to a remote host
+ *
+ * Generates an APPLICATION_CONNECT event on the socket, and blocks
+ * until the three-way handshake is complete. Note that the socket may
+ * already be in the CLOSE_WAIT state (instead of ESTABLISHED) when this
+ * function returns, if the peer sent a FIN right after the handshake.
+ *
+ * Returns: 0 on success, -1 on error (with errno set).
+ */
 extern int chisocket_connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen);
+
+/*
+ * chisocket_accept - Accepts a connection on a listening socket
+ *
+ * Blocks until a connection request arrives, creates a new (active)
+ * socket for that connection, and then blocks until the three-way
+ * handshake is complete. Note that the new socket may already be in
+ * the CLOSE_WAIT state (instead of ESTABLISHED) when this function
+ * returns, if the peer sent a FIN right after the handshake.
+ *
+ * Returns: The socket descriptor of the new socket on success,
+ * -1 on error (with errno set).
+ */
 extern int chisocket_accept(int sockfd, struct sockaddr* addr, socklen_t *addrlen);
 extern int chisocket_close(int sockfd);
 extern ssize_t chisocket_recv(int sockfd, void *buffer, size_t length, int flags);

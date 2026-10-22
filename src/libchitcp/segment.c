@@ -1,9 +1,9 @@
 /*
  *  chiTCP - A simple, testable TCP stack
  *
- *  Header and packet type declarations and functions
+ *  Header and segment type declarations and functions
  *
- *  see chitcp/packet.h for descriptions of functions, parameters, and return values.
+ *  see chitcp/segment.h for descriptions of functions, parameters, and return values.
  *
  */
 
@@ -45,67 +45,67 @@
 #include <arpa/inet.h>
 
 #include "chitcp/types.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 #include "chitcp/log.h"
 
-/* See packet.h */
+/* See segment.h */
 uint16_t chitcp_ntohs(uint16_t netshort)
 {
     return ntohs(netshort);
 }
 
-/* See packet.h */
+/* See segment.h */
 uint16_t chitcp_htons(uint16_t hostshort)
 {
     return htons(hostshort);
 }
 
-/* See packet.h */
+/* See segment.h */
 uint32_t chitcp_ntohl(uint32_t netlong)
 {
     return ntohl(netlong);
 }
 
-/* See packet.h */
+/* See segment.h */
 uint32_t chitcp_htonl(uint32_t hostlong)
 {
     return htonl(hostlong);
 }
 
-/* See packet.h */
-int chitcp_tcp_packet_init(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len)
+/* See segment.h */
+int chitcp_tcp_segment_init(tcp_segment_t *segment, const uint8_t* payload, uint16_t payload_len)
 {
     tcphdr_t *header;
 
-    packet->length = TCP_HEADER_NOOPTIONS_SIZE + payload_len;
-    packet->raw = calloc(packet->length, 1);
-    header = (tcphdr_t*) packet->raw;
+    segment->length = TCP_HEADER_NOOPTIONS_SIZE + payload_len;
+    segment->raw = calloc(segment->length, 1);
+    header = (tcphdr_t*) segment->raw;
 
     // No TCP options
     header->doff = TCP_HEADER_NOOPTIONS_SIZE / sizeof(uint32_t);
 
     if (payload_len)
-        memcpy(packet->raw + TCP_HEADER_NOOPTIONS_SIZE, payload, payload_len);
+        memcpy(segment->raw + TCP_HEADER_NOOPTIONS_SIZE, payload, payload_len);
 
-    return packet->length;
+    return segment->length;
 }
 
-/* See packet.h */
-void chitcp_tcp_packet_free(tcp_packet_t *packet)
+/* See segment.h */
+void chitcp_tcp_segment_free(tcp_segment_t *segment)
 {
-    free((void *) packet->raw);
+    free((void *) segment->raw);
 }
 
 
 
-/* See packet.h */
-int chitcp_packet_list_destroy(tcp_packet_list_t **pl)
+/* See segment.h */
+int chitcp_segment_list_destroy(tcp_segment_list_t **pl)
 {
-    tcp_packet_list_t *elt, *tmp;
+    tcp_segment_list_t *elt, *tmp;
 
     DL_FOREACH_SAFE(*pl,elt,tmp)
     {
-        free(elt->packet);
+        free(elt->segment);
         DL_DELETE(*pl,elt);
         free(elt);
     }
@@ -113,43 +113,46 @@ int chitcp_packet_list_destroy(tcp_packet_list_t **pl)
     return CHITCP_OK;
 }
 
-/* See packet.h */
-int chitcp_packet_list_prepend(tcp_packet_list_t **pl, tcp_packet_t *packet)
+/* See segment.h */
+int chitcp_segment_list_prepend(tcp_segment_list_t **pl, tcp_segment_t *segment)
 {
-    tcp_packet_list_t *elt = calloc(1, sizeof(tcp_packet_list_t));
+    tcp_segment_list_t *elt = calloc(1, sizeof(tcp_segment_list_t));
 
-    elt->packet = packet;
+    elt->segment = segment;
 
     DL_PREPEND(*pl, elt);
 
     return CHITCP_OK;
 }
 
-/* See packet.h */
-int chitcp_packet_list_append(tcp_packet_list_t **pl, tcp_packet_t *packet)
+/* See segment.h */
+int chitcp_segment_list_append(tcp_segment_list_t **pl, tcp_segment_t *segment)
 {
-    tcp_packet_list_t *elt = calloc(1, sizeof(tcp_packet_list_t));
+    tcp_segment_list_t *elt = calloc(1, sizeof(tcp_segment_list_t));
 
-    elt->packet = packet;
+    elt->segment = segment;
 
     DL_APPEND(*pl, elt);
 
     return CHITCP_OK;
 }
 
-/* See packet.h */
-int chitcp_packet_list_pop_head(tcp_packet_list_t **pl)
+/* See segment.h */
+int chitcp_segment_list_pop_head(tcp_segment_list_t **pl)
 {
-    DL_DELETE(*pl,*pl);
+    tcp_segment_list_t *head = *pl;
+
+    DL_DELETE(*pl, head);
+    free(head);
 
     return CHITCP_OK;
 }
 
-/* See packet.h */
-int chitcp_packet_list_size(tcp_packet_list_t *pl)
+/* See segment.h */
+int chitcp_segment_list_size(tcp_segment_list_t *pl)
 {
     int count = 0;
-    tcp_packet_list_t *elt;
+    tcp_segment_list_t *elt;
 
     DL_COUNT(pl, elt, count);
 

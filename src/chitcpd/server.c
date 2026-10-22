@@ -7,7 +7,7 @@
  *  More specifically, the daemon spawns two threads:
  *
  *  THE SERVER THREAD: This thread listens on a UNIX socket (by default,
- *  /tmp/chitcpd.socket). Local applications will connect to this socket
+ *  /tmp/chitcpd.socket.LOGIN, where LOGIN is your login). Local applications will connect to this socket
  *  to send requests to chitcpd (for example, to create a new chisocket).
  *  The server thread is in charge of handling these requests, and it
  *  spawns a new HANDLER THREAD for each connection on the UNIX socket.
@@ -79,6 +79,12 @@
 #include "chitcp/addr.h"
 #include "chitcp/utlist.h"
 
+/* How long chitcpd_server_stop waits for TCP threads to exit. A TCP thread
+ * should exit almost immediately once its socket is closed, so we only wait
+ * for a short time (some tests have short timeouts, and the daemon is
+ * stopped at the end of every test) */
+#define TCP_THREADS_EXIT_TIMEOUT_MS (250)
+
 /* Server thread and network thread functions.
  * We declare them in advance because chitcpd_server_init will
  * be calling them */
@@ -136,6 +142,8 @@ int chitcpd_server_init(serverinfo_t *si)
 
     /* Initialize chisocket table */
     pthread_mutex_init(&si->lock_chisocket_table, NULL);
+    pthread_cond_init(&si->cv_chisocket_table, NULL);
+    si->num_tcp_threads = 0;
     si->chisocket_table = calloc(si->chisocket_table_size, sizeof(chisocketentry_t));
 
     if(si->chisocket_table == NULL)
@@ -253,11 +261,11 @@ int chitcpd_server_start(serverinfo_t *si)
      */
 
     /* Create arguments to delivery thread */
-    packet_delivery_thread_args_t *pdta = malloc(sizeof(packet_delivery_thread_args_t));
+    segment_delivery_thread_args_t *pdta = malloc(sizeof(segment_delivery_thread_args_t));
     pdta->si = si;
 
     /* Create delivery thread */
-    if (pthread_create(&si->delivery_thread, NULL, chitcpd_packet_delivery_thread_func, pdta) < 0)
+    if (pthread_create(&si->delivery_thread, NULL, chitcpd_segment_delivery_thread_func, pdta) < 0)
     {
         perror("Could not create delivery thread");
         free(pdta);
@@ -285,6 +293,7 @@ int chitcpd_server_wait(serverinfo_t *si)
 {
     chilog(DEBUG, "Waiting for chiTCP daemon to stop.");
 
+    pthread_mutex_lock(&si->lock_state);
     while(si->state != CHITCPD_STATE_STOPPED)
         pthread_cond_wait(&si->cv_state, &si->lock_state);
     pthread_mutex_unlock(&si->lock_state);
@@ -341,6 +350,25 @@ int chitcpd_server_stop(serverinfo_t *si)
 
     pthread_join(si->server_thread, NULL);
 
+    /* The server thread waits for all the handler threads to exit, and
+     * those close any sockets they created. However, the TCP threads for
+     * those sockets may still be running (e.g., in the middle of freeing
+     * their socket entry), so we wait for them to finish before the
+     * daemon can be freed. */
+    chilog(DEBUG, "Waiting for TCP threads to exit...");
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_nsec += TCP_THREADS_EXIT_TIMEOUT_MS * 1000000L;
+    deadline.tv_sec += deadline.tv_nsec / 1000000000L;
+    deadline.tv_nsec %= 1000000000L;
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    while(si->num_tcp_threads > 0)
+        if (pthread_cond_timedwait(&si->cv_chisocket_table, &si->lock_chisocket_table, &deadline) == ETIMEDOUT)
+            break;
+    if(si->num_tcp_threads > 0)
+        chilog(WARNING, "%i TCP thread(s) did not exit after %i milliseconds.", si->num_tcp_threads, TCP_THREADS_EXIT_TIMEOUT_MS);
+    pthread_mutex_unlock(&si->lock_chisocket_table);
+
     if (si->libpcap_file != NULL) {
         fclose(si->libpcap_file);
     }
@@ -359,9 +387,18 @@ int chitcpd_server_stop(serverinfo_t *si)
 
 int chitcpd_server_free(serverinfo_t *si)
 {
-    free(si->chisocket_table);
-    free(si->connection_table);
-    free(si->port_table);
+    /* If any TCP threads are still running (see chitcpd_server_stop),
+     * they may still be using these tables, so we don't free them */
+    pthread_mutex_lock(&si->lock_chisocket_table);
+    int num_tcp_threads = si->num_tcp_threads;
+    pthread_mutex_unlock(&si->lock_chisocket_table);
+
+    if(num_tcp_threads == 0)
+    {
+        free(si->chisocket_table);
+        free(si->connection_table);
+        free(si->port_table);
+    }
 
     pthread_mutex_destroy(&si->lock_state);
     pthread_cond_destroy(&si->cv_state);

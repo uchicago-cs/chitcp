@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -158,31 +159,56 @@ int chitcp_tester_server_run_set(chitcp_tester_t* tester, chitcp_tester_runnable
 }
 
 
+/* Converts the return value of chitcpd_wait_for_state into a CHITCP_* code */
+static int chitcp_tester_wait_for_state_rc(int rc, const char *peer, tcp_state_t tcp_state)
+{
+    if(rc == 0)
+        return CHITCP_OK;
+
+    chilog(ERROR, "Error waiting for %s socket to reach %s: %s", peer, tcp_str(tcp_state), strerror(errno));
+
+    return errno == ENOTCONN? CHITCP_ENOENT : CHITCP_EINVAL;
+}
+
+
+/* Returns the state of a tester peer (the peer's thread can update it at any time) */
+static peer_state_t chitcp_tester_peer_get_state(chitcp_tester_peer_t* peer)
+{
+    peer_state_t state;
+
+    pthread_mutex_lock(&peer->lock_state);
+    state = peer->state;
+    pthread_mutex_unlock(&peer->lock_state);
+
+    return state;
+}
+
+
 /* See tester.h */
 int chitcp_tester_server_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state)
 {
-    if(tester->server->state == STATE_UNINITIALIZED ||
-       tester->server->state == STATE_INITIALIZED ||
-       tester->server->state == STATE_SERVER_LISTENING)
+    peer_state_t peer_state = chitcp_tester_peer_get_state(tester->server);
+
+    if(peer_state == STATE_UNINITIALIZED ||
+       peer_state == STATE_INITIALIZED ||
+       peer_state == STATE_SERVER_LISTENING)
         chitcp_tester_peer_wait_for_state(tester->server, STATE_SERVER_READY);
 
-    chitcpd_wait_for_state(tester->server->sockfd, tcp_state);
-
-    return CHITCP_OK;
+    return chitcp_tester_wait_for_state_rc(chitcpd_wait_for_state(tester->server->sockfd, tcp_state), "server", tcp_state);
 }
 
 
 /* See tester.h */
 int chitcp_tester_client_wait_for_state(chitcp_tester_t* tester, tcp_state_t tcp_state)
 {
-    if(tester->client->state == STATE_UNINITIALIZED ||
-       tester->client->state == STATE_INITIALIZED ||
-       tester->client->state == STATE_CLIENT_CONNECTING)
+    peer_state_t peer_state = chitcp_tester_peer_get_state(tester->client);
+
+    if(peer_state == STATE_UNINITIALIZED ||
+       peer_state == STATE_INITIALIZED ||
+       peer_state == STATE_CLIENT_CONNECTING)
         chitcp_tester_peer_wait_for_state(tester->client, STATE_CLIENT_READY);
 
-    chitcpd_wait_for_state(tester->client->sockfd, tcp_state);
-
-    return CHITCP_OK;
+    return chitcp_tester_wait_for_state_rc(chitcpd_wait_for_state(tester->client->sockfd, tcp_state), "client", tcp_state);
 }
 
 

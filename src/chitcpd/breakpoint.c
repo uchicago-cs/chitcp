@@ -157,8 +157,18 @@ enum chitcpd_debug_response chitcpd_debug_breakpoint(serverinfo_t *si, int sockf
 
 void chitcpd_debug_detach_monitor(chisocketentry_t *entry)
 {
+    /* As in obtain_debug_mon, we must read the entry's debug monitor
+     * while holding the entry's lock_debug_monitor, and we only release
+     * that lock once we are on the monitor's waiting list (otherwise,
+     * the monitor could be destroyed before we lock it) */
+    pthread_mutex_lock(&entry->lock_debug_monitor);
     debug_monitor_t *debug_mon = entry->debug_monitor;
-    debug_mon_lock(debug_mon, NULL);
+    if (debug_mon == NULL)
+    {
+        pthread_mutex_unlock(&entry->lock_debug_monitor);
+        return;
+    }
+    debug_mon_lock(debug_mon, &entry->lock_debug_monitor);
     detach_monitor_from_entry(debug_mon, entry);
     debug_mon_release(debug_mon);
 }
@@ -205,7 +215,10 @@ static debug_monitor_t *obtain_debug_mon(chisocketentry_t *entry, int event_flag
     debug_mon_lock(debug_mon, &entry->lock_debug_monitor);
 
     /* Perhaps this debug_mon is no longer being used with this socket. */
-    if (debug_mon != entry->debug_monitor)
+    pthread_mutex_lock(&entry->lock_debug_monitor);
+    bool_t detached = (debug_mon != entry->debug_monitor);
+    pthread_mutex_unlock(&entry->lock_debug_monitor);
+    if (detached)
     {
         debug_mon_release(debug_mon);
         return NULL;
@@ -339,7 +352,15 @@ static void debug_mon_lock(debug_monitor_t *debug_mon, pthread_mutex_t *mutex_to
  */
 static void debug_mon_release(debug_monitor_t *debug_mon)
 {
-    if (debug_mon->dying && debug_mon->numwaiters == 0)
+    /* Once a debug monitor is dying, and has been detached from all
+     * sockets, no new threads can start waiting for it (threads only
+     * find a debug monitor through a socket entry). So, if there are
+     * no waiters now, there never will be. */
+    pthread_mutex_lock(&debug_mon->lock_numwaiters);
+    bool_t destroy = debug_mon->dying && debug_mon->numwaiters == 0;
+    pthread_mutex_unlock(&debug_mon->lock_numwaiters);
+
+    if (destroy)
         debug_mon_destroy(debug_mon);
     else
         debug_mon_unlock(debug_mon);
@@ -350,9 +371,12 @@ static void debug_mon_unlock(debug_monitor_t *debug_mon)
     pthread_mutex_unlock(&debug_mon->lock_sockfd);
 }
 
+/* Ensure debug_mon is locked before calling. */
 static void debug_mon_destroy(debug_monitor_t *debug_mon)
 {
     close(debug_mon->sockfd);
+    /* A mutex must be unlocked before it is destroyed */
+    pthread_mutex_unlock(&debug_mon->lock_sockfd);
     pthread_mutex_destroy(&debug_mon->lock_sockfd);
     pthread_mutex_destroy(&debug_mon->lock_numwaiters);
     free(debug_mon);

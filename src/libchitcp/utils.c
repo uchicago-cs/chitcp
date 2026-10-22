@@ -45,7 +45,7 @@
 #include "chitcp/utils.h"
 #include "chitcp/socket.h"
 #include "chitcp/types.h"
-#include "chitcp/packet.h"
+#include "chitcp/segment.h"
 
 const char *tcp_str(tcp_state_t state);
 

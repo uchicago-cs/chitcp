@@ -91,10 +91,13 @@ static enum chitcpd_debug_response simultaneous_close_checker(int sockfd, enum c
     /* Ensure that close is truly simultaneous. This prevents
      * a race condition where one peer send its FIN message
      * before the other peer has transitioned to FIN_WAIT_1.
-     * The following code prevents the FIN packet from being
+     * The following code prevents the FIN segment from being
      * delivered if the socket is still in an ESTABLISHED state.
+     *
+     * Note: state_info will be NULL if the segment is being
+     * received by the passive socket (i.e., the initial SYN)
      */
-    if (event_flag == DBG_EVT_INCOMING_PACKET)
+    if (event_flag == DBG_EVT_INCOMING_SEGMENT && state_info != NULL)
     {
         tcp_state_t curs = state_info->tcp_state;
 
@@ -121,7 +124,7 @@ static enum chitcpd_debug_response simultaneous_close_checker(int sockfd, enum c
             )
                 cr_assert_fail("Invalid transition: %s -> %s", tcp_str(prevs), tcp_str(curs));
 
-            /* If there was a FIN packet waiting to be delivered,
+            /* If there was a FIN segment waiting to be delivered,
              * release it now. */
             if (prevs == ESTABLISHED && curs == FIN_WAIT_1)
             {
@@ -156,11 +159,14 @@ Test(conn_term, client_closes_first, .init = chitcpd_and_tester_setup, .fini = c
     tester_connect();
 
     chitcp_tester_client_close(tester);
-    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for client to reach FIN_WAIT_2");
     chitcp_tester_server_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 }
@@ -179,10 +185,13 @@ Test(conn_term, server_closes_first, .init = chitcpd_and_tester_setup, .fini = c
     tester_connect();
 
     chitcp_tester_server_close(tester);
-    chitcp_tester_server_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for server to reach FIN_WAIT_2");
     chitcp_tester_client_close(tester);
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 }
@@ -192,10 +201,10 @@ Test(conn_term, simultaneous_close, .init = chitcpd_and_tester_setup, .fini = ch
     int rc;
 
     rc = chitcp_tester_server_set_debug(tester, simultaneous_close_checker,
-                                        DBG_EVT_PENDING_CONNECTION| DBG_EVT_TCP_STATE_CHANGE);
+                                        DBG_EVT_PENDING_CONNECTION| DBG_EVT_TCP_STATE_CHANGE | DBG_EVT_INCOMING_SEGMENT);
     cr_assert(rc == 0, "Error setting debug handler (server)");
 
-    rc = chitcp_tester_client_set_debug(tester, simultaneous_close_checker, DBG_EVT_TCP_STATE_CHANGE);
+    rc = chitcp_tester_client_set_debug(tester, simultaneous_close_checker, DBG_EVT_TCP_STATE_CHANGE | DBG_EVT_INCOMING_SEGMENT);
     cr_assert(rc == 0, "Error setting debug handler (client)");
 
     tester_connect();
@@ -203,8 +212,10 @@ Test(conn_term, simultaneous_close, .init = chitcpd_and_tester_setup, .fini = ch
     chitcp_tester_server_close(tester);
     chitcp_tester_client_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 }

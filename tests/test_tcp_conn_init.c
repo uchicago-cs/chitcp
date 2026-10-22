@@ -124,8 +124,10 @@ Test(conn_init, 3way_states, .init = chitcpd_and_tester_setup, .fini = chitcpd_a
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_done();
 }
@@ -145,8 +147,10 @@ Test(conn_init, 3way_vars, .init = chitcpd_and_tester_setup, .fini = chitcpd_and
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_done();
 }

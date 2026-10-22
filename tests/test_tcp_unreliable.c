@@ -28,14 +28,14 @@ static bool_t drop_in_passive;
 static bool_t drop_in_active;
 static tcp_state_t drop_in_state;
 
-/* A simple debug handler that will drop up to drop_count packets. */
-enum chitcpd_debug_response drop_packets(int sockfd, enum chitcpd_debug_event event_flag, debug_socket_state_t *state_info, debug_socket_state_t *saved_state_info, int new_sockfd)
+/* A simple debug handler that will drop up to drop_count segments. */
+enum chitcpd_debug_response drop_segments(int sockfd, enum chitcpd_debug_event event_flag, debug_socket_state_t *state_info, debug_socket_state_t *saved_state_info, int new_sockfd)
 {
     if (event_flag == DBG_EVT_PENDING_CONNECTION)
     {
         return DBG_RESP_ACCEPT_MONITOR;
     }
-    else if (event_flag == DBG_EVT_INCOMING_PACKET || event_flag == DBG_EVT_OUTGOING_PACKET)
+    else if (event_flag == DBG_EVT_INCOMING_SEGMENT || event_flag == DBG_EVT_OUTGOING_SEGMENT)
     {
         tcp_state_t curs;
 
@@ -62,19 +62,19 @@ enum chitcpd_debug_response drop_packets(int sockfd, enum chitcpd_debug_event ev
 }
 
 /*
- * This makes things much more difficult. It will drop packets at random, dictated
+ * This makes things much more difficult. It will drop segments at random, dictated
  * by the drop percentage.
  */
-static float drop_percentage = 0.25; /* Percentage of packets to drop. */
-static unsigned int seed = 0; /* Change this number to change the dropped packets */
-enum chitcpd_debug_response drop_random_packets(int sockfd, enum chitcpd_debug_event event_flag, debug_socket_state_t *state_info, debug_socket_state_t *saved_state_info, int new_sockfd)
+static float drop_percentage = 0.25; /* Percentage of segments to drop. */
+static unsigned int seed = 0; /* Change this number to change the dropped segments */
+enum chitcpd_debug_response drop_random_segments(int sockfd, enum chitcpd_debug_event event_flag, debug_socket_state_t *state_info, debug_socket_state_t *saved_state_info, int new_sockfd)
 {
 
     if (event_flag == DBG_EVT_PENDING_CONNECTION)
     {
         return DBG_RESP_ACCEPT_MONITOR;
     }
-    else if (event_flag == DBG_EVT_INCOMING_PACKET)
+    else if (event_flag == DBG_EVT_INCOMING_SEGMENT)
     {
         tcp_state_t curs;
 
@@ -101,13 +101,13 @@ enum chitcpd_debug_response drop_random_packets(int sockfd, enum chitcpd_debug_e
 }
 
 
-/* This allows a test to specify debug commands for the first 16 packets in
+/* This allows a test to specify debug commands for the first 16 segments in
  * the established state. This allows us to reliably reproduce various out of
  * order scenarios.
  */
-static int packet_id = 0;
-static enum chitcpd_debug_response packet_sequence[16];
-static int packet_sequence_size = 0;
+static int segment_id = 0;
+static enum chitcpd_debug_response segment_sequence[16];
+static int segment_sequence_size = 0;
 
 enum chitcpd_debug_response out_of_order_handler(int sockfd, enum chitcpd_debug_event event_flag, debug_socket_state_t *state_info, debug_socket_state_t *saved_state_info, int new_sockfd)
 {
@@ -115,7 +115,7 @@ enum chitcpd_debug_response out_of_order_handler(int sockfd, enum chitcpd_debug_
     {
         return DBG_RESP_ACCEPT_MONITOR;
     }
-    else if (event_flag == DBG_EVT_INCOMING_PACKET)
+    else if (event_flag == DBG_EVT_INCOMING_SEGMENT)
     {
 
         if(state_info)
@@ -126,15 +126,15 @@ enum chitcpd_debug_response out_of_order_handler(int sockfd, enum chitcpd_debug_
             if (curs == ESTABLISHED)
             {
                 enum chitcpd_debug_response response;
-                if (packet_id < packet_sequence_size)
+                if (segment_id < segment_sequence_size)
                 {
-                    response = packet_sequence[packet_id];
+                    response = segment_sequence[segment_id];
                 }
                 else
                 {
                     response = DBG_RESP_NONE;
                 }
-                packet_id++;
+                segment_id++;
                 return response;
             }
         }
@@ -142,9 +142,9 @@ enum chitcpd_debug_response out_of_order_handler(int sockfd, enum chitcpd_debug_
     return DBG_RESP_NONE;
 }
 
-/* This test performs a three-way handshake, but drops the SYN packet sent by
+/* This test performs a three-way handshake, but drops the SYN segment sent by
  * the active opener. It should detect that no SYN-ACK was received, and resent
- * the same SYN packet. */
+ * the same SYN segment. */
 Test(unreliable_conn_init, drop_syn, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
     drop_count = 1;
@@ -152,20 +152,22 @@ Test(unreliable_conn_init, drop_syn, .init = chitcpd_and_tester_setup, .fini = c
     drop_in_passive = TRUE;
     drop_in_active = FALSE;
 
-    chitcp_tester_server_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_done();
 }
 
-/* This test performs a three-way handshake, but drops the SYN-ACK packet sent by
- * the passive opener. This will result in both the SYN packet timing out (because
- * the active opener didn't receive an ACK for its SYN) and the SYN-ACK packet itself
+/* This test performs a three-way handshake, but drops the SYN-ACK segment sent by
+ * the passive opener. This will result in both the SYN segment timing out (because
+ * the active opener didn't receive an ACK for its SYN) and the SYN-ACK segment itself
  * timing out (because it was also not ACK'd) */
 Test(unreliable_conn_init, drop_synack, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
@@ -175,13 +177,15 @@ Test(unreliable_conn_init, drop_synack, .init = chitcpd_and_tester_setup, .fini 
     drop_in_passive = FALSE;
     drop_in_active = TRUE;
 
-    chitcp_tester_client_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_client_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_done();
 }
@@ -201,15 +205,16 @@ Test(unreliable_conn_init, drop_ack, .init = chitcpd_and_tester_setup, .fini = c
     drop_in_passive = FALSE;
     drop_in_active = TRUE;
 
-    chitcp_tester_server_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
 
     /* At this point, the client is in ESTABLISHED, but the server is
      * in SYN_RCVD because the last message in the three-way handshake
@@ -222,15 +227,16 @@ Test(unreliable_conn_init, drop_ack, .init = chitcpd_and_tester_setup, .fini = c
     chitcp_tester_client_run(tester);
     chitcp_tester_server_run(tester);
 
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_done();
 
     free(nbytes);
 }
 
-/* This tests established a connection (without any packet drops), and then the client
- * initiates a connection termination by sending a FIN packet, which is dropped.
+/* This tests established a connection (without any segment drops), and then the client
+ * initiates a connection termination by sending a FIN segment, which is dropped.
  * The client should detect this and re-send the FIN. */
 Test(unreliable_conn_term, drop_fin_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
@@ -240,30 +246,35 @@ Test(unreliable_conn_term, drop_fin_1, .init = chitcpd_and_tester_setup, .fini =
     drop_in_passive = FALSE;
     drop_in_active = TRUE;
 
-    chitcp_tester_server_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     chitcp_tester_client_close(tester);
-    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for client to reach FIN_WAIT_2");
     chitcp_tester_server_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 }
 
-/* This tests established a connection (without any packet drops), and then the client
- * initiates a connection termination by sending a FIN packet, which is delivered
+/* This tests established a connection (without any segment drops), and then the client
+ * initiates a connection termination by sending a FIN segment, which is delivered
  * normally (with the client transitioning to FIN_WAIT_2). The server then initiates
- * a termination of its side of the connection by sending a FIN packet, which is dropped.
+ * a termination of its side of the connection by sending a FIN segment, which is dropped.
  * The server should detect this (because it did not receive an ACK in the LAST_ACK state)
- * and should re-send the FIN packet. */
+ * and should re-send the FIN segment. */
 Test(unreliable_conn_term, drop_fin_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
     drop_count = 1;
@@ -272,28 +283,33 @@ Test(unreliable_conn_term, drop_fin_2, .init = chitcpd_and_tester_setup, .fini =
     drop_in_passive = FALSE;
     drop_in_active = TRUE;
 
-    chitcp_tester_client_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_client_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     chitcp_tester_client_close(tester);
-    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for client to reach FIN_WAIT_2");
     chitcp_tester_server_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 }
 
 
 /* This test established a connection, and then has the client send 15 bytes to the server
- * (which should be sent in a single packet). This packet is dropped, and should be re-sent. */
-Test(unreliable_data_transfer, drop_single_packet, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
+ * (which should be sent in a single segment). This segment is dropped, and should be re-sent. */
+Test(unreliable_data_transfer, drop_single_segment, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -307,13 +323,15 @@ Test(unreliable_data_transfer, drop_single_packet, .init = chitcpd_and_tester_se
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -324,9 +342,9 @@ Test(unreliable_data_transfer, drop_single_packet, .init = chitcpd_and_tester_se
 
 
 /* This test establishes a connection, and then has the client send 15 bytes to the server
- * (which should be sent in a single packet). This packet is dropped, and should be re-sent.
- * However, the re-sent packet will *also* be dropped, so it should be sent again.*/
-Test(unreliable_data_transfer, drop_multiple_packets, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 4.0)
+ * (which should be sent in a single segment). This segment is dropped, and should be re-sent.
+ * However, the re-sent segment will *also* be dropped, so it should be sent again.*/
+Test(unreliable_data_transfer, drop_multiple_segments, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 4.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -340,13 +358,15 @@ Test(unreliable_data_transfer, drop_multiple_packets, .init = chitcpd_and_tester
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -356,8 +376,8 @@ Test(unreliable_data_transfer, drop_multiple_packets, .init = chitcpd_and_tester
 }
 
 /* This test establishes a connection, and then has the client send 2680 bytes to the server
- * (which should be sent in five packets). The first packet is dropped, and should be re-sent.
- * If go-back-N is implemented the subsequent four packets are resent as well. */
+ * (which should be sent in five segments). The first segment is dropped, and should be re-sent.
+ * If go-back-N is implemented the subsequent four segments are resent as well. */
 Test(unreliable_data_transfer, go_back_n, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 4.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -372,13 +392,15 @@ Test(unreliable_data_transfer, go_back_n, .init = chitcpd_and_tester_setup, .fin
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -399,17 +421,22 @@ Test(rtt_estimation, rtt_0_75s, .init = chitcpd_and_tester_setup, .fini = chitcp
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
     chitcp_tester_client_close(tester);
-    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for client to reach FIN_WAIT_2");
     chitcp_tester_server_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 
@@ -428,17 +455,22 @@ Test(rtt_estimation, rtt_1_5s, .init = chitcpd_and_tester_setup, .fini = chitcpd
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
     chitcp_tester_client_close(tester);
-    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for client to reach FIN_WAIT_2");
     chitcp_tester_server_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 
@@ -457,17 +489,22 @@ Test(rtt_estimation, rtt_3s, .init = chitcpd_and_tester_setup, .fini = chitcpd_a
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
     chitcp_tester_client_close(tester);
-    chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, FIN_WAIT_2) == CHITCP_OK,
+              "Error waiting for client to reach FIN_WAIT_2");
     chitcp_tester_server_close(tester);
 
-    chitcp_tester_server_wait_for_state(tester, CLOSED);
-    chitcp_tester_client_wait_for_state(tester, CLOSED);
+    cr_assert(chitcp_tester_server_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for server to reach CLOSED");
+    cr_assert(chitcp_tester_client_wait_for_state(tester, CLOSED) == CHITCP_OK,
+              "Error waiting for client to reach CLOSED");
 
     tester_done();
 
@@ -475,7 +512,7 @@ Test(rtt_estimation, rtt_3s, .init = chitcpd_and_tester_setup, .fini = chitcpd_a
 }
 
 
-/* This test sends 32KB of data, and drops packets with probability p=0.025 */
+/* This test sends 32KB of data, and drops segments with probability p=0.025 */
 Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -487,13 +524,15 @@ Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_set
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -502,7 +541,7 @@ Test(unreliable_data_transfer, random_drop_025_1, .init = chitcpd_and_tester_set
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.025 */
+/* This test sends 32KB of data, and drops segments with probability p=0.025 */
 Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -514,13 +553,15 @@ Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_set
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -529,7 +570,7 @@ Test(unreliable_data_transfer, random_drop_025_2, .init = chitcpd_and_tester_set
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.025 */
+/* This test sends 32KB of data, and drops segments with probability p=0.025 */
 Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 2.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -541,13 +582,15 @@ Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_set
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -556,7 +599,7 @@ Test(unreliable_data_transfer, random_drop_025_3, .init = chitcpd_and_tester_set
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.05 */
+/* This test sends 32KB of data, and drops segments with probability p=0.05 */
 Test(unreliable_data_transfer, random_drop_05_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 4.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -568,13 +611,15 @@ Test(unreliable_data_transfer, random_drop_05_1, .init = chitcpd_and_tester_setu
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -583,7 +628,7 @@ Test(unreliable_data_transfer, random_drop_05_1, .init = chitcpd_and_tester_setu
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.05 */
+/* This test sends 32KB of data, and drops segments with probability p=0.05 */
 Test(unreliable_data_transfer, random_drop_05_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 4.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -595,13 +640,15 @@ Test(unreliable_data_transfer, random_drop_05_2, .init = chitcpd_and_tester_setu
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -610,7 +657,7 @@ Test(unreliable_data_transfer, random_drop_05_2, .init = chitcpd_and_tester_setu
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.05 */
+/* This test sends 32KB of data, and drops segments with probability p=0.05 */
 Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 4.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -622,13 +669,15 @@ Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setu
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -637,7 +686,7 @@ Test(unreliable_data_transfer, random_drop_05_3, .init = chitcpd_and_tester_setu
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.10 */
+/* This test sends 32KB of data, and drops segments with probability p=0.10 */
 Test(unreliable_data_transfer, random_drop_10_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 8.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -649,13 +698,15 @@ Test(unreliable_data_transfer, random_drop_10_1, .init = chitcpd_and_tester_setu
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -664,7 +715,7 @@ Test(unreliable_data_transfer, random_drop_10_1, .init = chitcpd_and_tester_setu
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.10 */
+/* This test sends 32KB of data, and drops segments with probability p=0.10 */
 Test(unreliable_data_transfer, random_drop_10_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 8.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -676,13 +727,15 @@ Test(unreliable_data_transfer, random_drop_10_2, .init = chitcpd_and_tester_setu
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -691,7 +744,7 @@ Test(unreliable_data_transfer, random_drop_10_2, .init = chitcpd_and_tester_setu
     free(nbytes);
 }
 
-/* This test sends 32KB of data, and drops packets with probability p=0.10 */
+/* This test sends 32KB of data, and drops segments with probability p=0.10 */
 Test(unreliable_data_transfer, random_drop_10_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 8.0)
 {
     int *nbytes = malloc(sizeof(int));
@@ -703,13 +756,15 @@ Test(unreliable_data_transfer, random_drop_10_3, .init = chitcpd_and_tester_setu
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -719,8 +774,8 @@ Test(unreliable_data_transfer, random_drop_10_3, .init = chitcpd_and_tester_setu
 }
 
 
-/* This test sends 64KB of data, and drops packets with probability p=0.25 */
-Test(unreliable_data_transfer, random_drop_25, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 20.0)
+/* This test sends 64KB of data, and drops segments with probability p=0.25 */
+Test(unreliable_data_transfer, random_drop_25, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 40.0)
 {
     int *nbytes = malloc(sizeof(int));
 
@@ -731,13 +786,15 @@ Test(unreliable_data_transfer, random_drop_25, .init = chitcpd_and_tester_setup,
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
-    chitcp_tester_server_set_debug(tester, drop_random_packets,
-                                   DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    chitcp_tester_server_set_debug(tester, drop_random_segments,
+                                   DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -748,35 +805,37 @@ Test(unreliable_data_transfer, random_drop_25, .init = chitcpd_and_tester_setup,
 
 
 
-/* This test results in five packets being sent, but with the first one arriving
- * out of order (after the other four packets). The receiving socket should be
- * able to reassemble these packets without any retransmissions (if out-of-order
- * delivery is not implemented, then all five packets will time out) */
+/* This test results in five segments being sent, but with the first one arriving
+ * out of order (after the other four segments). The receiving socket should be
+ * able to reassemble these segments without any retransmissions (if out-of-order
+ * delivery is not implemented, then all five segments will time out) */
 Test(unreliable_out_of_order, out_of_order_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
-    *nbytes = 2680; /* MSS * 5 to ensure five data packets are sent. */
-    packet_id = 0;
-    packet_sequence_size = 5;
+    *nbytes = 2680; /* MSS * 5 to ensure five data segments are sent. */
+    segment_id = 0;
+    segment_sequence_size = 5;
 
-    /* Packet should arrive in the sequence: 2, 3, 4, 1, 5 */
-    packet_sequence[0] = DBG_RESP_WITHHOLD;
-    packet_sequence[1] = DBG_RESP_NONE;
-    packet_sequence[2] = DBG_RESP_NONE;
-    packet_sequence[3] = DBG_RESP_NONE;
-    packet_sequence[4] = DBG_RESP_DRAW_WITHHELD;
+    /* Segment should arrive in the sequence: 2, 3, 4, 1, 5 */
+    segment_sequence[0] = DBG_RESP_WITHHOLD;
+    segment_sequence[1] = DBG_RESP_NONE;
+    segment_sequence[2] = DBG_RESP_NONE;
+    segment_sequence[3] = DBG_RESP_NONE;
+    segment_sequence[4] = DBG_RESP_DRAW_WITHHELD;
 
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
     chitcp_tester_server_set_debug(tester, out_of_order_handler,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -786,32 +845,34 @@ Test(unreliable_out_of_order, out_of_order_1, .init = chitcpd_and_tester_setup, 
 }
 
 
-/* This test results in four packets being sent, but with two packets out of order.
- * The packets arrive in this order: 3, 1, 4, 2 */
+/* This test results in four segments being sent, but with two segments out of order.
+ * The segments arrive in this order: 3, 1, 4, 2 */
 Test(unreliable_out_of_order, out_of_order_2, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
     *nbytes = 2144;
-    packet_id = 0;
+    segment_id = 0;
 
-    /* The packets should arrive as follows: 3, 1, 4, 2 */
-    packet_sequence_size = 4;
-    packet_sequence[0] = DBG_RESP_WITHHOLD;
-    packet_sequence[1] = DBG_RESP_WITHHOLD;
-    packet_sequence[2] = DBG_RESP_DRAW_WITHHELD;
-    packet_sequence[3] = DBG_RESP_DRAW_WITHHELD;
+    /* The segments should arrive as follows: 3, 1, 4, 2 */
+    segment_sequence_size = 4;
+    segment_sequence[0] = DBG_RESP_WITHHOLD;
+    segment_sequence[1] = DBG_RESP_WITHHOLD;
+    segment_sequence[2] = DBG_RESP_DRAW_WITHHELD;
+    segment_sequence[3] = DBG_RESP_DRAW_WITHHELD;
 
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
     chitcp_tester_server_set_debug(tester, out_of_order_handler,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -821,38 +882,40 @@ Test(unreliable_out_of_order, out_of_order_2, .init = chitcpd_and_tester_setup, 
 }
 
 
-/* This test results in eight packets being sent, with two of the packets arriving out
- * of order. When the first out-of-order packet arrives, it should only be possible
- * to process packets 1 through 4, while packets 6 and 7 should remain in the out
- * of order list until packet 5 arrives.
+/* This test results in eight segments being sent, with two of the segments arriving out
+ * of order. When the first out-of-order segment arrives, it should only be possible
+ * to process segments 1 through 4, while segments 6 and 7 should remain in the out
+ * of order list until segment 5 arrives.
  *
- * The packets arrive in this order: 2, 3, 5, 6, 1, 7, 4 */
+ * The segments arrive in this order: 2, 3, 5, 6, 1, 7, 4 */
 Test(unreliable_out_of_order, out_of_order_3, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
     *nbytes = 3752;
-    packet_id = 0;
+    segment_id = 0;
 
-    packet_sequence_size = 7;
-    packet_sequence[0] = DBG_RESP_WITHHOLD;
-    packet_sequence[1] = DBG_RESP_NONE;
-    packet_sequence[2] = DBG_RESP_NONE;
-    packet_sequence[3] = DBG_RESP_WITHHOLD;
-    packet_sequence[4] = DBG_RESP_NONE;
-    packet_sequence[5] = DBG_RESP_DRAW_WITHHELD;
-    packet_sequence[6] = DBG_RESP_DRAW_WITHHELD;
+    segment_sequence_size = 7;
+    segment_sequence[0] = DBG_RESP_WITHHOLD;
+    segment_sequence[1] = DBG_RESP_NONE;
+    segment_sequence[2] = DBG_RESP_NONE;
+    segment_sequence[3] = DBG_RESP_WITHHOLD;
+    segment_sequence[4] = DBG_RESP_NONE;
+    segment_sequence[5] = DBG_RESP_DRAW_WITHHELD;
+    segment_sequence[6] = DBG_RESP_DRAW_WITHHELD;
 
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
     chitcp_tester_server_set_debug(tester, out_of_order_handler,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 
@@ -862,49 +925,51 @@ Test(unreliable_out_of_order, out_of_order_3, .init = chitcpd_and_tester_setup, 
 }
 
 
-/* This test results in eight packets being sent, with the first one being delayed
- * until the very end (i.e., packets arrive in order 2,3,4,5,6,7,8,1).
+/* This test results in eight segments being sent, with the first one being delayed
+ * until the very end (i.e., segments arrive in order 2,3,4,5,6,7,8,1).
  *
  * Unlike the other out-of-order tests, this test results in the TCP window being full.
  * The reason is that we are trying to send a total of 4288 bytes, but the window is
- * just 4096 bytes. In previous tests, this was not an issue because we acknowledged packets
- * as they arrived, which kept the window fairly open. However, because the first packet is
+ * just 4096 bytes. In previous tests, this was not an issue because we acknowledged segments
+ * as they arrived, which kept the window fairly open. However, because the first segment is
  * delayed, the sender will not receive any acknowledgements, and will have to keep
- * all the packets in the send buffer. This means the 8th packet must have only 344 bytes
- * (to avoid overflowing the window). Once the 1st packet arrives, and the out-of-order
- * packets can be reassembled, the sender will receive acknowledgements (that will open
- * up the window) and will send the remaining 192 bytes in a ninth packet.
+ * all the segments in the send buffer. This means the 8th segment must have only 344 bytes
+ * (to avoid overflowing the window). Once the 1st segment arrives, and the out-of-order
+ * segments can be reassembled, the sender will receive acknowledgements (that will open
+ * up the window) and will send the remaining 192 bytes in a ninth segment.
  *
  * This test should result in no retransmissions. If you open the libpcap file in Wireshark,
- * it should show a "TCP Window Full" packet.
+ * it should show a "TCP Window Full" segment.
  */
 Test(unreliable_out_of_order, full_window_1, .init = chitcpd_and_tester_setup, .fini = chitcpd_and_tester_teardown, .timeout = 0.5)
 {
     int *nbytes = malloc(sizeof(int));
 
     *nbytes = 4288;
-    packet_id = 0;
+    segment_id = 0;
 
-    packet_sequence_size = 8;
-    packet_sequence[0] = DBG_RESP_WITHHOLD;
-    packet_sequence[1] = DBG_RESP_NONE;
-    packet_sequence[2] = DBG_RESP_NONE;
-    packet_sequence[3] = DBG_RESP_NONE;
-    packet_sequence[4] = DBG_RESP_NONE;
-    packet_sequence[5] = DBG_RESP_NONE;
-    packet_sequence[6] = DBG_RESP_NONE;
-    packet_sequence[7] = DBG_RESP_DRAW_WITHHELD;
+    segment_sequence_size = 8;
+    segment_sequence[0] = DBG_RESP_WITHHOLD;
+    segment_sequence[1] = DBG_RESP_NONE;
+    segment_sequence[2] = DBG_RESP_NONE;
+    segment_sequence[3] = DBG_RESP_NONE;
+    segment_sequence[4] = DBG_RESP_NONE;
+    segment_sequence[5] = DBG_RESP_NONE;
+    segment_sequence[6] = DBG_RESP_NONE;
+    segment_sequence[7] = DBG_RESP_DRAW_WITHHELD;
 
     chitcp_tester_client_run_set(tester, sender, nbytes);
     chitcp_tester_server_run_set(tester, receiver, nbytes);
 
     chitcp_tester_server_set_debug(tester, out_of_order_handler,
-    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_PACKET);
+    DBG_EVT_PENDING_CONNECTION | DBG_EVT_INCOMING_SEGMENT);
 
     tester_connect();
 
-    chitcp_tester_client_wait_for_state(tester, ESTABLISHED);
-    chitcp_tester_server_wait_for_state(tester, ESTABLISHED);
+    cr_assert(chitcp_tester_client_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for client to reach ESTABLISHED");
+    cr_assert(chitcp_tester_server_wait_for_state(tester, ESTABLISHED) == CHITCP_OK,
+              "Error waiting for server to reach ESTABLISHED");
 
     tester_run();
 

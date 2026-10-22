@@ -1,7 +1,7 @@
 /*
  *  chiTCP - A simple, testable TCP stack
  *
- *  Header and packet type declarations and functions
+ *  Header and segment type declarations and functions
  *
  */
 
@@ -37,8 +37,8 @@
  *
  */
 
-#ifndef CHITCP_PACKET_H_
-#define CHITCP_PACKET_H_
+#ifndef CHITCP_SEGMENT_H_
+#define CHITCP_SEGMENT_H_
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -66,144 +66,147 @@ uint32_t chitcp_htonl(uint32_t hostlong);
 
 /*
  *
- *  TCP Packet
+ *  TCP Segment
  *
  */
 
-/* struct to contain a single TCP packet */
-typedef struct tcp_packet
+/* struct to contain a single TCP segment */
+typedef struct tcp_segment
 {
     uint8_t    *raw;
     size_t  length;
-} tcp_packet_t;
+} tcp_segment_t;
 
 
 /*
- * chitcp_tcp_packet_init - Initializes a tcp_packet_t struct with a payload.
+ * chitcp_tcp_segment_init - Initializes a tcp_segment_t struct with a payload.
  *
  * The TCP header is zeroed out, except for the data offset field, which
  * is initialized to 5 (i.e., TCP header with no options)
  *
- * packet: Pointer to unitialized tcp_packet_t variable.
+ * segment: Pointer to unitialized tcp_segment_t variable.
  *
- * payload: Pointer to payload. The payload will be DEEP COPIED to the packet.
+ * payload: Pointer to payload. The payload will be DEEP COPIED to the segment.
  *
  * payload_len: Size of the payload in number of bytes.
  *
- * Returns: the size in bytes of the TCP packet.
+ * Returns: the size in bytes of the TCP segment.
  */
-int chitcp_tcp_packet_init(tcp_packet_t *packet, const uint8_t* payload, uint16_t payload_len);
+int chitcp_tcp_segment_init(tcp_segment_t *segment, const uint8_t* payload, uint16_t payload_len);
 
 
 /*
- * chitcp_tcp_packet_free - Frees up memory allocated for a TCP packet.
+ * chitcp_tcp_segment_free - Frees up memory allocated for a TCP segment.
  *
  * This function only frees the memory allocated to store the raw contents of
- * the packet (header + payload). It does not free up the tcp_packet_t variable
+ * the segment (header + payload). It does not free up the tcp_segment_t variable
  * itself. It is the responsibility of the calling function to do so.
  *
- * packet: Pointer to packet.
+ * segment: Pointer to segment.
  *
  * Returns: nothing.
  */
-void chitcp_tcp_packet_free(tcp_packet_t *packet);
+void chitcp_tcp_segment_free(tcp_segment_t *segment);
 
 
 /*
  *
- *  List of TCP Packets
+ *  List of TCP Segments
  *
  */
 
-/* Lists of TCP packets are manipulated using utlist functions.
+/* Lists of TCP segments are manipulated using utlist functions.
  * We provide a few convenience functions for some common operations */
 
-/* struct for linked list of TCP packets */
-typedef struct tcp_packet_list
+/* struct for linked list of TCP segments */
+typedef struct tcp_segment_list
 {
-    tcp_packet_t *packet;
-    struct tcp_packet_list *prev;
-    struct tcp_packet_list *next;
-} tcp_packet_list_t;
+    tcp_segment_t *segment;
+    struct tcp_segment_list *prev;
+    struct tcp_segment_list *next;
+} tcp_segment_list_t;
 
 
 /*
- * chitcp_packet_list_prepend - Adds a packet to the head of a list of packets
+ * chitcp_segment_list_prepend - Adds a segment to the head of a list of segments
  *
  * pl: Pointer to head pointer (this function will update the head pointer so
  *     that it points to the node that has just been added).
  *
- * packet: Pointer to packet to be added.
+ * segment: Pointer to segment to be added.
  *
  * Returns: Always returns CHITCP_OK.
  */
-int chitcp_packet_list_prepend(tcp_packet_list_t **pl, tcp_packet_t *packet);
+int chitcp_segment_list_prepend(tcp_segment_list_t **pl, tcp_segment_t *segment);
 
 
 /*
- * chitcp_packet_list_append - Adds a packet to the tail of a list of packets
+ * chitcp_segment_list_append - Adds a segment to the tail of a list of segments
  *
  * pl: Pointer to head pointer (if the head pointer was initially NULL, this
  *     function will update it to point to the node that was just added).
  *
- * packet: Pointer to packet to be added.
+ * segment: Pointer to segment to be added.
  *
  * Returns: Always returns CHITCP_OK.
  */
-int chitcp_packet_list_append(tcp_packet_list_t **pl, tcp_packet_t *packet);
+int chitcp_segment_list_append(tcp_segment_list_t **pl, tcp_segment_t *segment);
 
 
 /*
- * chitcp_packet_list_pop_head - Removes the packet at the head of the list.
+ * chitcp_segment_list_pop_head - Removes the segment at the head of the list.
  *
- * Note: This function doesn't return the packet, it just removes it.
+ * Note: This function doesn't return the segment, it just removes it.
+ * The list node is freed, but the segment itself is not. So, you must
+ * obtain a pointer to the segment (with (*pl)->segment) *before* calling
+ * this function.
  *
  * pl: Pointer to head pointer (head pointer is updated to point to new head,
- *     or set to NULL if the list is empty after the packet is removed).
+ *     or set to NULL if the list is empty after the segment is removed).
  *
  * Returns: Always returns CHITCP_OK.
  */
-int chitcp_packet_list_pop_head(tcp_packet_list_t **pl);
+int chitcp_segment_list_pop_head(tcp_segment_list_t **pl);
 
 
 /*
- * chitcp_packet_list_destroy - Frees the list and packets in it.
+ * chitcp_segment_list_destroy - Frees the list and segments in it.
  *
  * pl: Pointer to head pointer
  *
  * Returns: Always returns CHITCP_OK.
  */
-int chitcp_packet_list_destroy(tcp_packet_list_t **pl);
+int chitcp_segment_list_destroy(tcp_segment_list_t **pl);
 
 
 /*
- * chitcp_packet_list_size - Returns the size of the list
+ * chitcp_segment_list_size - Returns the size of the list
  *
  * pl: Head pointer
  *
- * Returns: Number of packets in the list
+ * Returns: Number of segments in the list
  */
-int chitcp_packet_list_size(tcp_packet_list_t *pl);
+int chitcp_segment_list_size(tcp_segment_list_t *pl);
 
 
 /*
  *
- * Withheld packets
+ * Withheld segments
  *
  */
 
-/* Struct to contain a withheld TCP packet */
-typedef struct withheld_tcp_packet
+/* Struct to contain a withheld TCP segment */
+typedef struct withheld_tcp_segment
 {
-    tcp_packet_t *packet;
+    tcp_segment_t *segment;
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
     bool duplicate;
-    struct withheld_tcp_packet *prev;
-    struct withheld_tcp_packet *next;
-} withheld_tcp_packet_t;
+    struct withheld_tcp_segment *prev;
+    struct withheld_tcp_segment *next;
+} withheld_tcp_segment_t;
 
-typedef struct withheld_tcp_packet withheld_tcp_packet_list_t;
+typedef struct withheld_tcp_segment withheld_tcp_segment_list_t;
 
 
 /*
@@ -257,31 +260,31 @@ typedef struct tcphdr
 #define TCP_HEADER_NOOPTIONS_SIZE (sizeof(tcphdr_t))
 
 /* Returns pointer to header */
-#define TCP_PACKET_HEADER(p) ((tcphdr_t*) (p)->raw)
+#define TCP_SEGMENT_HEADER(p) ((tcphdr_t*) (p)->raw)
 
-/* Returns pointer to the start of the packet's payload */
+/* Returns pointer to the start of the segment's payload */
 #define TCP_PAYLOAD_START(p) ((p)->raw + (((tcphdr_t *) (p)->raw)->doff * sizeof(uint32_t)))
 
-/* Returns length of TCP packet's payload */
+/* Returns length of TCP segment's payload */
 #define TCP_PAYLOAD_LEN(p) ((p)->length - (((tcphdr_t *) (p)->raw)->doff * sizeof(uint32_t)))
 
 /* Convenience macros to access the fields in the header,
  * using the nomenclature in RFC 9293 */
 
 /* segment sequence number */
-#define SEG_SEQ(p) (chitcp_ntohl(TCP_PACKET_HEADER(p)->seq))
+#define SEG_SEQ(p) (chitcp_ntohl(TCP_SEGMENT_HEADER(p)->seq))
 
 /* segment acknowledgment number */
-#define SEG_ACK(p) (chitcp_ntohl(TCP_PACKET_HEADER(p)->ack_seq))
+#define SEG_ACK(p) (chitcp_ntohl(TCP_SEGMENT_HEADER(p)->ack_seq))
 
 /* segment length */
-#define SEG_LEN(p) (TCP_PACKET_HEADER(p)->syn + TCP_PACKET_HEADER(p)->fin + TCP_PAYLOAD_LEN(p))
+#define SEG_LEN(p) (TCP_SEGMENT_HEADER(p)->syn + TCP_SEGMENT_HEADER(p)->fin + TCP_PAYLOAD_LEN(p))
 
 /* segment window */
-#define SEG_WND(p) (chitcp_ntohs(TCP_PACKET_HEADER(p)->win))
+#define SEG_WND(p) (chitcp_ntohs(TCP_SEGMENT_HEADER(p)->win))
 
 /* segment urgent pointer */
-#define SEG_UP(p) (chitcp_ntohs(TCP_PACKET_HEADER(p)->urp))
+#define SEG_UP(p) (chitcp_ntohs(TCP_SEGMENT_HEADER(p)->urp))
 
 
 /*
@@ -310,4 +313,4 @@ typedef enum {
 } chitcp_proto_t;
 
 
-#endif /* PACKET_H_ */
+#endif /* SEGMENT_H_ */

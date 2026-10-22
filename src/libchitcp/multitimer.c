@@ -130,14 +130,7 @@ int mt_set_timer_name(multi_timer_t *mt, uint16_t id, const char *name)
 }
 
 
-/* mt_chilog_single_timer - Prints a single timer using chilog
- *
- * level: chilog log level
- *
- * timer: Timer
- *
- * Returns: Always returns CHITCP_OK
- */
+/* See multitimer.h */
 int mt_chilog_single_timer(loglevel_t level, single_timer_t *timer)
 {
     struct timespec now, diff;

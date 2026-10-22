@@ -72,14 +72,17 @@ void chitcp_set_addr_port(struct sockaddr *addr, in_port_t port);
  *
  * addr1, addr2: The addresses
  *
- * Returns: 0 if the addresses are identical (IP address and TCP port)
+ * Only the address family and IP address are compared. The TCP port
+ * is not compared (use chitcp_addr_port_cmp for that).
+ *
+ * Returns: 0 if the addresses have the same family and IP address.
  *          Non-zero value otherwise.
  */
 int chitcp_addr_cmp(struct sockaddr *addr1, struct sockaddr *addr2);
 
 
 /*
- * chitcp_addr_cmp - Compares ports in two addresses
+ * chitcp_addr_port_cmp - Compares ports in two addresses
  *
  * addr1, addr2: The addresses
  *
